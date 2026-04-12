@@ -93,8 +93,8 @@ pub fn run() {
                 use tauri::Manager;
                 if let Some(window) = app.get_webview_window("main") {
                     let (_, _, work_right, work_bottom) = get_work_area();
-                    let win_w = 400;
-                    let win_h = 480;
+                    let win_w = 420;
+                    let win_h = 540;
                     let x = work_right - win_w - 12;
                     let y = work_bottom - win_h - 12;
                     let _ = window.set_position(tauri::Position::Physical(
