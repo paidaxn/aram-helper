@@ -353,7 +353,11 @@ impl LcuConnection {
         let mut puuid_map: HashMap<i64, String> = HashMap::new();
         for id in identities {
             let pid = id["participantId"].as_i64().unwrap_or(0);
-            name_map.insert(pid, id["player"]["summonerName"].as_str().unwrap_or("未知").to_string());
+            let name = id["player"]["gameName"].as_str()
+                .or_else(|| id["player"]["summonerName"].as_str())
+                .unwrap_or("未知")
+                .to_string();
+            name_map.insert(pid, name);
             puuid_map.insert(pid, id["player"]["puuid"].as_str().unwrap_or("").to_string());
         }
 

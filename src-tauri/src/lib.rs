@@ -54,8 +54,10 @@ pub fn run() {
                     let scale = monitor.scale_factor();
                     let win_w = (380.0 * scale) as u32;
                     let win_h = (560.0 * scale) as u32;
+                    // 预留 Windows 任务栏空间（约 60px 物理像素）
+                    let taskbar = (60.0 * scale) as u32;
                     let x = screen.width.saturating_sub(win_w).saturating_sub(16) as i32;
-                    let y = screen.height.saturating_sub(win_h).saturating_sub(48) as i32;
+                    let y = screen.height.saturating_sub(win_h).saturating_sub(taskbar) as i32;
                     let _ = window.set_position(tauri::Position::Physical(
                         tauri::PhysicalPosition::new(x, y),
                     ));
