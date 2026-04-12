@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from "vue";
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { RULES, getRule, type GameResult } from "./rules";
 
@@ -50,6 +50,45 @@ const ruleResult = computed(() => {
 const show4pToggle = computed(
   () => currentRule.value.id === "classic" && ruleResult.value?.friendCount === 4
 );
+
+// ────── 响应式窗口高度 ──────
+const appRoot = ref<HTMLElement>();
+
+function computeTargetHeight(): number {
+  if (page.value === "status") return 420;
+  if (page.value === "history") return 560;
+  if (page.value === "settings") return 520;
+
+  if (page.value === "result" && ruleResult.value) {
+    const r = ruleResult.value;
+    let h = 32; // padding
+    h += 52; // nav (含分隔线)
+    if (show4pToggle.value) h += 48;
+    if (r.needsFloors && !gameResult.value?.hasAccurateFloors) h += 34;
+    if (r.isRedPacketGame) {
+      if (loserTeam.value) h += 82; // 输家横幅
+      for (const t of r.teams) {
+        h += 44; // 队伍头部 + 边框 + margin
+        h += t.players.length * 22; // 每个玩家行
+      }
+    } else {
+      h += 100; // "不是红包局" 提示
+    }
+    return Math.max(360, Math.min(720, h));
+  }
+  return 480;
+}
+
+async function resizeToContent() {
+  await nextTick();
+  try {
+    await invoke("resize_window", { height: computeTargetHeight() });
+  } catch {}
+}
+
+watch([page, ruleResult, fourPlayerMode], () => {
+  resizeToContent();
+});
 const loserTeam = computed(() => ruleResult.value?.teams.find((t) => t.isLoser));
 
 // ────── 轮询 ──────
@@ -227,7 +266,7 @@ onUnmounted(() => clearPoll());
 </script>
 
 <template>
-  <div class="app">
+  <div class="app" ref="appRoot">
     <!-- ====== 状态页 ====== -->
     <template v-if="page === 'status'">
       <div v-if="connStatus === 'disconnected'" class="center-page">
@@ -308,8 +347,8 @@ onUnmounted(() => clearPoll());
           </div>
 
           <div v-if="loserTeam" class="loser-box">
-            <span class="loser-name">{{ loserTeam.players.map(p => p.summonerName).join("、") }}</span>
-            <span class="loser-label">💸 发红包</span>
+            <div class="loser-name">{{ loserTeam.players.map(p => p.summonerName).join("、") }}</div>
+            <div class="loser-slogan">就是你了，发红包吧！</div>
           </div>
 
           <div
@@ -426,6 +465,10 @@ html, body {
   user-select: none;
   -webkit-font-smoothing: antialiased;
 }
+
+/* 隐藏所有滚动条（仍可滚动） */
+* { scrollbar-width: none; }
+*::-webkit-scrollbar { display: none; width: 0; height: 0; }
 
 body::before {
   content: '';
@@ -604,24 +647,38 @@ body::before {
 
 /* ────── 输家高亮 ────── */
 .loser-box {
-  text-align: center;
-  padding: 14px 12px; margin-bottom: 12px;
-  background: linear-gradient(135deg, rgba(239,68,68,0.12) 0%, rgba(239,68,68,0.04) 100%);
+  padding: 14px 14px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, rgba(239,68,68,0.14) 0%, rgba(239,68,68,0.04) 100%);
   border-radius: 10px;
   border: 1px solid rgba(239, 68, 68, 0.3);
   box-shadow: 0 0 20px var(--danger-glow);
-  position: relative; overflow: hidden;
+  position: relative;
+  overflow: hidden;
+  text-align: center;
 }
 .loser-box::before {
-  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
   background: linear-gradient(90deg, transparent, var(--danger), transparent);
 }
 .loser-name {
   font-family: var(--font-display);
-  color: var(--danger); font-weight: 700;
-  font-size: 16px; letter-spacing: 0.3px;
+  color: var(--danger);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.3px;
+  line-height: 1.35;
+  word-break: break-word;
+  margin-bottom: 3px;
 }
-.loser-label { color: var(--danger); font-size: 13px; margin-left: 8px; opacity: 0.9; }
+.loser-slogan {
+  font-size: 12px;
+  color: var(--danger);
+  opacity: 0.8;
+  letter-spacing: 0.3px;
+}
 
 /* ────── 队伍卡片 ────── */
 .team {
@@ -666,9 +723,6 @@ body::before {
 
 /* ────── 历史列表 ────── */
 .h-list { flex: 1; overflow-y: auto; }
-.h-list::-webkit-scrollbar { width: 4px; }
-.h-list::-webkit-scrollbar-track { background: transparent; }
-.h-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 .h-item {
   display: flex; align-items: center; gap: 10px;

@@ -129,6 +129,29 @@ async fn get_game_result(game_id: i64, state: tauri::State<'_, AppState>) -> Res
     conn.get_game_result(game_id, &HashMap::new()).await.map_err(|e| e.to_string())
 }
 
+/// 动态调整窗口高度（宽度固定 420）
+#[tauri::command]
+async fn resize_window(window: tauri::Window, height: u32) -> Result<(), String> {
+    window
+        .set_size(tauri::Size::Logical(tauri::LogicalSize::new(420.0, height as f64)))
+        .map_err(|e| e.to_string())?;
+
+    // Windows 上保持贴右下角
+    #[cfg(target_os = "windows")]
+    {
+        let (_, _, work_right, work_bottom) = get_work_area();
+        let scale = window.scale_factor().unwrap_or(1.0);
+        let phys_w = (420.0 * scale) as i32;
+        let phys_h = (height as f64 * scale) as i32;
+        let x = work_right - phys_w - 12;
+        let y = work_bottom - phys_h - 12;
+        let _ = window.set_position(tauri::Position::Physical(
+            tauri::PhysicalPosition::new(x, y),
+        ));
+    }
+    Ok(())
+}
+
 /// 获取 Windows 工作区域
 #[cfg(target_os = "windows")]
 fn get_work_area() -> (i32, i32, i32, i32) {
@@ -155,7 +178,8 @@ pub fn run() {
             capture_champ_select,
             get_damage_ranking,
             get_match_list,
-            get_game_result
+            get_game_result,
+            resize_window
         ])
         .setup(|app| {
             use tauri::Manager;
@@ -170,7 +194,7 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let (_, _, work_right, work_bottom) = get_work_area();
                 let win_w = 420;
-                let win_h = 540;
+                let win_h = 420;
                 let x = work_right - win_w - 12;
                 let y = work_bottom - win_h - 12;
                 let _ = window.set_position(tauri::Position::Physical(
