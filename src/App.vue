@@ -45,8 +45,9 @@ async function pollConnection() {
     errorMsg.value = "";
     status.value = "connected";
     pollGamePhase();
-  } catch {
+  } catch (e) {
     status.value = "disconnected";
+    errorMsg.value = String(e);
     pollTimer = setTimeout(pollConnection, 5000);
   }
 }
