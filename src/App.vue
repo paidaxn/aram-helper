@@ -193,24 +193,42 @@ onUnmounted(() => clearPoll());
     <!-- ====== 状态页 ====== -->
     <template v-if="page === 'status'">
       <div v-if="connStatus === 'disconnected'" class="center-page">
-        <div class="icon">🎮</div>
+        <div class="brand-logo">
+          <svg viewBox="0 0 64 64" width="56" height="56">
+            <defs>
+              <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#A78BFA"/>
+                <stop offset="100%" stop-color="#7C3AED"/>
+              </linearGradient>
+            </defs>
+            <circle cx="32" cy="32" r="28" fill="none" stroke="url(#g1)" stroke-width="2" opacity="0.4"/>
+            <rect x="18" y="22" width="28" height="24" rx="3" fill="#F59E0B"/>
+            <rect x="18" y="22" width="28" height="7" rx="3" fill="#EA580C"/>
+            <circle cx="32" cy="36" r="5" fill="#FBBF24"/>
+          </svg>
+        </div>
         <p class="title">LOL 红包局助手</p>
-        <p class="sub">等待客户端启动...</p>
+        <p class="sub">等待客户端启动</p>
         <div class="dots"><i /><i /><i /></div>
         <p v-if="errorMsg" class="err">{{ errorMsg }}</p>
       </div>
 
       <div v-else class="center-page">
-        <div class="icon pulse">⚡</div>
+        <div class="status-ring">
+          <svg viewBox="0 0 64 64" width="48" height="48">
+            <circle cx="32" cy="32" r="28" fill="none" stroke="#7C3AED" stroke-width="2" opacity="0.3"/>
+            <path d="M32 14 L32 30 L44 30 L28 50 L28 34 L16 34 Z" fill="#A78BFA"/>
+          </svg>
+        </div>
         <p class="title">已连接</p>
         <p class="name">{{ summonerName }}</p>
         <p class="sub">{{ gamePhase ? phaseText(gamePhase) : "等待对局结束" }}</p>
         <div class="dots"><i /><i /><i /></div>
-        <div class="row" style="margin-top:16px">
+        <div class="row" style="margin-top:20px">
           <button class="btn-s" @click="viewLastGame" :disabled="loading">
-            {{ loading ? "..." : "上一局" }}
+            {{ loading ? "加载中" : "上一局" }}
           </button>
-          <button class="btn-s" @click="loadHistory">历史</button>
+          <button class="btn-s" @click="loadHistory">历史记录</button>
         </div>
         <p v-if="errorMsg" class="err">{{ errorMsg }}</p>
       </div>
@@ -280,71 +298,352 @@ onUnmounted(() => clearPoll());
 </template>
 
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
 * { margin:0; padding:0; box-sizing:border-box; }
-:root { --bg:#0f0f1a; --card:#1a1a2e; --text:#e0e0e0; --accent:#6366f1; --red:#ef4444; --muted:#666; }
 
-body { background:var(--bg); color:var(--text); font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; user-select:none; }
+:root {
+  /* 配色 - 电竞紫金 */
+  --bg:            #0A0E1A;
+  --bg-gradient:   radial-gradient(ellipse at top right, rgba(124,58,237,0.12) 0%, transparent 50%),
+                   radial-gradient(ellipse at bottom left, rgba(245,158,11,0.06) 0%, transparent 50%);
+  --surface:       #151B2E;
+  --surface-2:     #1E2540;
+  --border:        #2A3451;
+  --border-light:  #3A4563;
 
-.app { height:100vh; display:flex; flex-direction:column; padding:14px; overflow:hidden; }
+  --text:          #F1F5F9;
+  --text-2:        #CBD5E1;
+  --muted:         #64748B;
 
-/* 居中页面 */
-.center-page { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
-.icon { font-size:48px; margin-bottom:12px; }
-.pulse { animation:pulse 2s ease-in-out infinite; }
-@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.7;transform:scale(1.08)} }
-.title { font-size:20px; font-weight:700; margin-bottom:6px; }
-.name { color:var(--accent); font-size:15px; font-weight:600; margin-bottom:4px; }
-.sub { color:var(--muted); font-size:13px; }
-.err { color:var(--red); font-size:11px; margin-top:8px; max-width:300px; word-break:break-all; }
+  --primary:       #7C3AED;
+  --primary-hi:    #A78BFA;
+  --primary-glow:  rgba(124, 58, 237, 0.35);
+  --gold:          #F59E0B;
+  --gold-hi:       #FBBF24;
+  --danger:        #EF4444;
+  --danger-glow:   rgba(239, 68, 68, 0.25);
 
-.dots { display:flex; gap:4px; margin-top:14px; }
-.dots i { width:5px; height:5px; border-radius:50%; background:var(--muted); animation:dot 1.4s ease-in-out infinite; display:block; }
-.dots i:nth-child(2) { animation-delay:.2s; }
-.dots i:nth-child(3) { animation-delay:.4s; }
-@keyframes dot { 0%,80%,100%{opacity:.3;transform:scale(.8)} 40%{opacity:1;transform:scale(1.2)} }
+  /* 字体 */
+  --font-display:  'Chakra Petch', 'Segoe UI', sans-serif;
+  --font-body:     'Inter', 'Segoe UI Variable', 'Segoe UI', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
 
-.row { display:flex; gap:6px; }
-.btn-s { padding:6px 14px; border:1px solid var(--muted); border-radius:6px; background:transparent; color:var(--text); font-size:12px; cursor:pointer; }
-.btn-s:disabled { opacity:.4; }
-.btn-s:active { background:rgba(255,255,255,.04); }
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 13px;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
 
-.approx-tip { font-size:11px; color:#f59e0b; margin-bottom:8px; }
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: var(--bg-gradient);
+  pointer-events: none;
+  z-index: 0;
+}
 
-/* 页面容器 */
-.page { flex:1; display:flex; flex-direction:column; overflow:hidden; }
-.page.scrollable { overflow-y:auto; }
+.app {
+  position: relative;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  overflow: hidden;
+  z-index: 1;
+}
 
-/* 导航 */
-.nav { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
-.btn-back { padding:4px 10px; border:1px solid var(--muted); border-radius:4px; background:transparent; color:var(--text); font-size:12px; cursor:pointer; flex-shrink:0; }
-.btn-back:active { background:rgba(255,255,255,.04); }
-.nav-title { font-size:16px; font-weight:700; }
-.nav-meta { color:var(--muted); font-size:11px; margin-left:auto; }
+/* ────── 居中页面 ────── */
+.center-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
 
-/* 输家高亮 */
-.loser-box { text-align:center; padding:10px; margin-bottom:10px; background:rgba(239,68,68,.08); border-radius:8px; border:1px solid rgba(239,68,68,.2); }
-.loser-name { color:var(--red); font-weight:700; font-size:15px; }
-.loser-label { color:var(--red); font-size:13px; margin-left:6px; }
+.brand-logo, .status-ring {
+  margin-bottom: 16px;
+  filter: drop-shadow(0 0 20px var(--primary-glow));
+}
 
-/* 队伍 */
-.team { background:var(--card); border-radius:8px; padding:10px 12px; margin-bottom:5px; border:1.5px solid transparent; }
-.team.lose { border-color:var(--red); background:rgba(239,68,68,.04); }
-.team-top { display:flex; align-items:center; margin-bottom:4px; }
-.team-name { font-weight:600; font-size:13px; flex:1; }
-.team-pts { color:var(--accent); font-weight:700; font-size:13px; font-variant-numeric:tabular-nums; }
+.status-ring { animation: breathe 2.4s ease-in-out infinite; }
+@keyframes breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.05); }
+}
 
-.p-row { display:flex; align-items:center; gap:4px; font-size:11px; padding:2px 0; }
-.p-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.p-dmg { color:var(--text); width:48px; text-align:right; font-variant-numeric:tabular-nums; }
-.p-tkn { color:#f59e0b; width:48px; text-align:right; font-variant-numeric:tabular-nums; }
-.p-kda { color:var(--muted); width:44px; text-align:right; }
+.title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
 
-/* 历史列表 */
-.h-list { flex:1; overflow-y:auto; }
-.h-item { display:flex; align-items:center; gap:6px; padding:10px 12px; background:var(--card); border-radius:6px; margin-bottom:3px; cursor:pointer; font-size:12px; }
-.h-item:active { background:rgba(99,102,241,.08); }
-.h-mode { font-weight:600; flex:1; }
-.h-dur { color:var(--muted); }
-.h-time { color:var(--muted); width:52px; text-align:right; }
-.h-arrow { color:var(--muted); font-size:16px; }
+.name {
+  font-family: var(--font-display);
+  color: var(--primary-hi);
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  letter-spacing: 0.3px;
+  text-shadow: 0 0 12px var(--primary-glow);
+}
+
+.sub { color: var(--muted); font-size: 13px; }
+
+.err {
+  color: var(--danger);
+  font-size: 11px;
+  margin-top: 10px;
+  max-width: 320px;
+  word-break: break-all;
+  padding: 6px 10px;
+  background: rgba(239, 68, 68, 0.08);
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.dots { display: flex; gap: 5px; margin-top: 18px; }
+.dots i {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--primary);
+  animation: dot 1.4s ease-in-out infinite;
+  display: block;
+  box-shadow: 0 0 8px var(--primary-glow);
+}
+.dots i:nth-child(2) { animation-delay: .2s; }
+.dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes dot {
+  0%,80%,100% { opacity: .3; transform: scale(.8); }
+  40% { opacity: 1; transform: scale(1.2); }
+}
+
+.row { display: flex; gap: 8px; }
+
+.btn-s {
+  padding: 8px 18px;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-s:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--text);
+  background: var(--surface-2);
+}
+.btn-s:disabled { opacity: .4; cursor: not-allowed; }
+.btn-s:active:not(:disabled) { transform: translateY(1px); }
+
+/* ────── 页面容器 ────── */
+.page { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.page.scrollable { overflow-y: auto; }
+
+/* ────── 导航 ────── */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.btn-back {
+  padding: 5px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-2);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.btn-back:hover { border-color: var(--primary); color: var(--text); }
+
+.nav-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.nav-meta {
+  color: var(--muted);
+  font-size: 11px;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.approx-tip {
+  font-size: 11px;
+  color: var(--gold);
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 6px;
+}
+
+/* ────── 输家高亮 ────── */
+.loser-box {
+  text-align: center;
+  padding: 14px 12px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, rgba(239,68,68,0.12) 0%, rgba(239,68,68,0.04) 100%);
+  border-radius: 10px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  box-shadow: 0 0 20px var(--danger-glow);
+  position: relative;
+  overflow: hidden;
+}
+.loser-box::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--danger), transparent);
+}
+.loser-name {
+  font-family: var(--font-display);
+  color: var(--danger);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.3px;
+}
+.loser-label {
+  color: var(--danger);
+  font-size: 13px;
+  margin-left: 8px;
+  opacity: 0.9;
+}
+
+/* ────── 队伍卡片 ────── */
+.team {
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 11px 13px;
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+  transition: all 0.2s ease;
+}
+.team:hover { border-color: var(--border-light); }
+.team.lose {
+  border-color: rgba(239, 68, 68, 0.5);
+  background: linear-gradient(135deg, rgba(239,68,68,0.05), var(--surface));
+}
+
+.team-top {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.team-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  flex: 1;
+  letter-spacing: 0.3px;
+}
+.team-pts {
+  font-family: var(--font-display);
+  color: var(--primary-hi);
+  font-weight: 700;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+}
+.team.lose .team-pts { color: var(--danger); }
+
+.p-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 3px 0;
+}
+.p-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+}
+.p-dmg {
+  color: var(--text);
+  width: 52px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.p-tkn {
+  color: var(--gold);
+  width: 52px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.p-kda {
+  color: var(--muted);
+  width: 50px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ────── 历史列表 ────── */
+.h-list { flex: 1; overflow-y: auto; }
+.h-list::-webkit-scrollbar { width: 4px; }
+.h-list::-webkit-scrollbar-track { background: transparent; }
+.h-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.h-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  margin-bottom: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+.h-item:hover {
+  border-color: var(--primary);
+  background: var(--surface-2);
+  transform: translateX(2px);
+}
+.h-mode {
+  font-family: var(--font-display);
+  font-weight: 600;
+  flex: 1;
+  color: var(--text);
+  letter-spacing: 0.3px;
+}
+.h-dur { color: var(--muted); font-variant-numeric: tabular-nums; }
+.h-time {
+  color: var(--muted);
+  width: 58px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.h-arrow { color: var(--primary); font-size: 18px; font-weight: 600; }
 </style>
