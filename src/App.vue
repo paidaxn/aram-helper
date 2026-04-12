@@ -56,25 +56,30 @@ const appRoot = ref<HTMLElement>();
 
 function computeTargetHeight(): number {
   if (page.value === "status") return 420;
-  if (page.value === "history") return 560;
-  if (page.value === "settings") return 520;
+  if (page.value === "history") return 580;
+  if (page.value === "settings") return 540;
 
   if (page.value === "result" && ruleResult.value) {
     const r = ruleResult.value;
-    let h = 32; // padding
-    h += 52; // nav (含分隔线)
-    if (show4pToggle.value) h += 48;
-    if (r.needsFloors && !gameResult.value?.hasAccurateFloors) h += 34;
+    let h = 36; // 上下 padding
+    h += 62; // nav（含分隔线和 margin）
+    if (show4pToggle.value) h += 56;
+    if (r.needsFloors && !gameResult.value?.hasAccurateFloors) h += 42;
     if (r.isRedPacketGame) {
-      if (loserTeam.value) h += 82; // 输家横幅
-      for (const t of r.teams) {
-        h += 44; // 队伍头部 + 边框 + margin
-        h += t.players.length * 22; // 每个玩家行
+      if (loserTeam.value) {
+        const names = loserTeam.value.players.map((p) => p.summonerName).join("、");
+        const wrap = names.length > 14 ? 1 : 0;
+        h += 96 + wrap * 28; // 输家横幅（名字 + slogan）
       }
+      for (const t of r.teams) {
+        h += 64; // 队伍头部 + 边框 + margin
+        h += t.players.length * 24; // 每个玩家行
+      }
+      h += 16; // 底部安全 buffer
     } else {
-      h += 100; // "不是红包局" 提示
+      h += 100;
     }
-    return Math.max(360, Math.min(720, h));
+    return Math.max(380, Math.min(760, h));
   }
   return 480;
 }
@@ -647,20 +652,22 @@ body::before {
 
 /* ────── 输家高亮 ────── */
 .loser-box {
-  padding: 14px 14px;
+  padding: 14px 14px 12px;
   margin-bottom: 12px;
   background: linear-gradient(135deg, rgba(239,68,68,0.14) 0%, rgba(239,68,68,0.04) 100%);
   border-radius: 10px;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  border: 1px solid rgba(239, 68, 68, 0.35);
   box-shadow: 0 0 20px var(--danger-glow);
   position: relative;
-  overflow: hidden;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .loser-box::before {
   content: '';
   position: absolute;
-  top: 0; left: 0; right: 0; height: 2px;
+  top: 0; left: 12px; right: 12px; height: 2px;
   background: linear-gradient(90deg, transparent, var(--danger), transparent);
 }
 .loser-name {
@@ -671,13 +678,13 @@ body::before {
   letter-spacing: 0.3px;
   line-height: 1.35;
   word-break: break-word;
-  margin-bottom: 3px;
 }
 .loser-slogan {
-  font-size: 12px;
-  color: var(--danger);
-  opacity: 0.8;
+  font-size: 13px;
+  color: #FCA5A5;
+  font-weight: 500;
   letter-spacing: 0.3px;
+  line-height: 1.3;
 }
 
 /* ────── 队伍卡片 ────── */
