@@ -47,11 +47,11 @@ interface MatchSummary {
 
 type Page = "status" | "result" | "history";
 const page = ref<Page>("status");
+const cameFrom = ref<Page>("status"); // 记录从哪个页面进入结果页
 const connStatus = ref<"disconnected" | "connected">("disconnected");
 const summonerName = ref("");
 const gamePhase = ref("");
 const errorMsg = ref("");
-const copied = ref(false);
 const loading = ref(false);
 
 const gameResult = ref<GameResult | null>(null);
@@ -99,6 +99,7 @@ async function fetchLatestResult() {
   loading.value = true;
   try {
     gameResult.value = await invoke<GameResult>("get_damage_ranking");
+    cameFrom.value = "status";
     page.value = "result";
   } catch (e) {
     errorMsg.value = String(e);
@@ -112,6 +113,7 @@ async function viewLastGame() {
   clearPoll();
   try {
     gameResult.value = await invoke<GameResult>("get_damage_ranking");
+    cameFrom.value = "status";
     page.value = "result";
   } catch (e) { errorMsg.value = String(e); }
   finally { loading.value = false; }
@@ -131,9 +133,21 @@ async function viewGame(gameId: number) {
   errorMsg.value = "";
   try {
     gameResult.value = await invoke<GameResult>("get_game_result", { gameId });
+    cameFrom.value = "history";
     page.value = "result";
   } catch (e) { errorMsg.value = String(e); }
   finally { loading.value = false; }
+}
+
+// 返回：根据来源决定去哪
+function goBack() {
+  if (page.value === "result" && cameFrom.value === "history") {
+    page.value = "history";
+  } else if (page.value === "history") {
+    goHome();
+  } else {
+    goHome();
+  }
 }
 
 function goHome() {
@@ -144,21 +158,6 @@ function goHome() {
 }
 
 // ────── 工具 ──────
-
-async function copyResult() {
-  if (!gameResult.value?.isRedPacketGame) return;
-  const r = gameResult.value;
-  let text = "🏆 ARAM 红包局结算\n\n";
-  for (const team of r.teams) {
-    text += `${team.name}：${Math.round(team.score).toLocaleString()} 分${team.isLoser ? " 💸" : ""}\n`;
-  }
-  if (loserTeam.value) {
-    text += `\n${loserTeam.value.players.map((p) => p.summonerName).join("、")} 发红包！`;
-  }
-  await navigator.clipboard.writeText(text);
-  copied.value = true;
-  setTimeout(() => (copied.value = false), 2000);
-}
 
 function fmt(n: number) { return n.toLocaleString(); }
 function fmtDur(s: number) { return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`; }
@@ -175,7 +174,8 @@ function phaseText(p: string) {
     ChampSelect:"选英雄中", InProgress:"游戏中", WaitingForStats:"结算中", EndOfGame:"对局结束" } as Record<string,string>)[p] || p;
 }
 function modeName(m: string) {
-  return ({ ARAM:"大乱斗", CLASSIC:"匹配/排位", URF:"无限火力", CHERRY:"斗魂竞技场" } as Record<string,string>)[m] || m;
+  return ({ ARAM:"大乱斗", KIWI:"大乱斗", CLASSIC:"匹配/排位", URF:"无限火力",
+    CHERRY:"斗魂竞技场", NEXUSBLITZ:"极限闪击" } as Record<string,string>)[m] || m;
 }
 
 onMounted(() => pollConnection());
@@ -214,7 +214,7 @@ onUnmounted(() => clearPoll());
     <template v-else-if="page === 'result' && gameResult">
       <div class="page">
         <div class="nav">
-          <span class="back" @click="goHome">←</span>
+          <button class="btn-back" @click="goBack">返回</button>
           <span class="nav-title">红包局结算</span>
           <span class="nav-meta">{{ modeName(gameResult.gameMode) }} {{ fmtDur(gameResult.gameDuration) }}</span>
         </div>
@@ -244,8 +244,6 @@ onUnmounted(() => clearPoll());
               <span class="p-kda">{{ p.kills }}/{{ p.deaths }}/{{ p.assists }}</span>
             </div>
           </div>
-
-          <button class="btn-copy" @click="copyResult">{{ copied ? "已复制 ✓" : "复制结果" }}</button>
         </template>
       </div>
     </template>
@@ -254,7 +252,7 @@ onUnmounted(() => clearPoll());
     <template v-else-if="page === 'history'">
       <div class="page">
         <div class="nav">
-          <span class="back" @click="goHome">←</span>
+          <button class="btn-back" @click="goBack">返回</button>
           <span class="nav-title">历史对局</span>
         </div>
 
@@ -303,11 +301,12 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,"PingF
 .btn-s:active { background:rgba(255,255,255,.04); }
 
 /* 页面容器 */
-.page { flex:1; display:flex; flex-direction:column; overflow-y:auto; }
+.page { flex:1; display:flex; flex-direction:column; }
 
 /* 导航 */
-.nav { display:flex; align-items:center; gap:6px; margin-bottom:10px; }
-.back { color:var(--accent); font-size:16px; cursor:pointer; padding:2px 4px; }
+.nav { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+.btn-back { padding:4px 10px; border:1px solid var(--muted); border-radius:4px; background:transparent; color:var(--text); font-size:12px; cursor:pointer; flex-shrink:0; }
+.btn-back:active { background:rgba(255,255,255,.04); }
 .nav-title { font-size:16px; font-weight:700; }
 .nav-meta { color:var(--muted); font-size:11px; margin-left:auto; }
 
@@ -328,10 +327,6 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,"PingF
 .p-dmg { color:var(--text); width:48px; text-align:right; font-variant-numeric:tabular-nums; }
 .p-tkn { color:#f59e0b; width:48px; text-align:right; font-variant-numeric:tabular-nums; }
 .p-kda { color:var(--muted); width:44px; text-align:right; }
-
-/* 复制按钮 */
-.btn-copy { margin-top:auto; padding:10px; border:none; border-radius:8px; background:var(--accent); color:#fff; font-size:13px; font-weight:600; cursor:pointer; }
-.btn-copy:active { background:#4f46e5; }
 
 /* 历史列表 */
 .h-list { flex:1; overflow-y:auto; }
