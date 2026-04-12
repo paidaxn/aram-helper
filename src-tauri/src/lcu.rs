@@ -38,9 +38,9 @@ impl LcuConnection {
         Ok(Self { port, auth, client })
     }
 
-    /// 获取 LCU 端口和 token
+    /// 获取 LCU 端口和 token（全自动检测，无需配置路径）
     fn find_credentials() -> Result<(String, String), Box<dyn std::error::Error + Send + Sync>> {
-        // 方式1：从进程命令行获取（Windows）
+        // 方式1：从进程命令行参数获取 port 和 token（最可靠）
         #[cfg(target_os = "windows")]
         {
             if let Ok(result) = Self::from_process_args() {
@@ -48,64 +48,96 @@ impl LcuConnection {
             }
         }
 
-        // 方式2：读 lockfile（常见安装路径）
-        let lockfile_paths = [
-            "E:/game/WeGameApps/英雄联盟/LeagueClient/lockfile",
-            "C:/Riot Games/League of Legends/lockfile",
-            "D:/Riot Games/League of Legends/lockfile",
-            "E:/Riot Games/League of Legends/lockfile",
-            "D:/英雄联盟/LeagueClient/lockfile",
-            "E:/英雄联盟/LeagueClient/lockfile",
-        ];
-
-        for path in &lockfile_paths {
-            if let Ok(content) = std::fs::read_to_string(path) {
-                let parts: Vec<&str> = content.trim().split(':').collect();
-                if parts.len() >= 4 {
-                    return Ok((parts[2].to_string(), parts[3].to_string()));
-                }
+        // 方式2：从进程路径定位 lockfile（备用）
+        #[cfg(target_os = "windows")]
+        {
+            if let Ok(result) = Self::from_process_lockfile() {
+                return Ok(result);
             }
         }
 
         Err("找不到英雄联盟客户端，请确保游戏已启动".into())
     }
 
-    /// Windows: 从进程命令行参数获取端口和 token
+    /// 从命令行参数中提取 port 和 token
+    #[cfg(target_os = "windows")]
+    fn extract_port_token(text: &str) -> Option<(String, String)> {
+        let port = text.find("--app-port=").and_then(|i| {
+            let start = i + 11;
+            let end = text[start..]
+                .find(|c: char| !c.is_ascii_digit())
+                .map(|j| start + j)
+                .unwrap_or(text.len());
+            let p = text[start..end].to_string();
+            if p.is_empty() { None } else { Some(p) }
+        })?;
+
+        let token = text.find("--remoting-auth-token=").and_then(|i| {
+            let start = i + 22;
+            let end = text[start..]
+                .find(|c: char| !c.is_alphanumeric() && c != '-' && c != '_')
+                .map(|j| start + j)
+                .unwrap_or(text.len());
+            let t = text[start..end].to_string();
+            if t.is_empty() { None } else { Some(t) }
+        })?;
+
+        Some((port, token))
+    }
+
+    /// Windows: 通过 PowerShell 获取进程命令行参数（兼容 Win10/11）
     #[cfg(target_os = "windows")]
     fn from_process_args() -> Result<(String, String), Box<dyn std::error::Error + Send + Sync>> {
         use std::process::Command;
 
-        let output = Command::new("wmic")
-            .args(["process", "where", "name='LeagueClientUx.exe'", "get", "CommandLine", "/format:list"])
+        let output = Command::new("powershell")
+            .args([
+                "-NoProfile", "-Command",
+                "(Get-CimInstance Win32_Process -Filter \"name='LeagueClientUx.exe'\").CommandLine",
+            ])
             .output()?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
+        if stdout.trim().is_empty() {
+            return Err("LeagueClientUx.exe 进程未运行".into());
+        }
 
-        let port = stdout
-            .find("--app-port=")
-            .and_then(|i| {
-                let start = i + 11;
-                let end = stdout[start..]
-                    .find(|c: char| !c.is_ascii_digit())
-                    .map(|j| start + j)
-                    .unwrap_or(stdout.len());
-                Some(stdout[start..end].to_string())
-            })
-            .ok_or("未找到 app-port")?;
+        Self::extract_port_token(&stdout)
+            .ok_or_else(|| "进程命令行中未找到 port/token".into())
+    }
 
-        let token = stdout
-            .find("--remoting-auth-token=")
-            .and_then(|i| {
-                let start = i + 22;
-                let end = stdout[start..]
-                    .find(|c: char| !c.is_alphanumeric() && c != '-' && c != '_')
-                    .map(|j| start + j)
-                    .unwrap_or(stdout.len());
-                Some(stdout[start..end].to_string())
-            })
-            .ok_or("未找到 auth-token")?;
+    /// Windows: 通过进程路径定位 lockfile（备用方案）
+    #[cfg(target_os = "windows")]
+    fn from_process_lockfile() -> Result<(String, String), Box<dyn std::error::Error + Send + Sync>> {
+        use std::process::Command;
 
-        Ok((port, token))
+        // 获取 LeagueClientUx.exe 的可执行文件路径
+        let output = Command::new("powershell")
+            .args([
+                "-NoProfile", "-Command",
+                "(Get-Process LeagueClientUx -ErrorAction SilentlyContinue).Path",
+            ])
+            .output()?;
+
+        let exe_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if exe_path.is_empty() {
+            return Err("未找到 LeagueClientUx 进程".into());
+        }
+
+        // lockfile 和客户端 exe 在同一目录
+        let client_dir = std::path::Path::new(&exe_path)
+            .parent()
+            .ok_or("无法获取客户端目录")?;
+        let lockfile_path = client_dir.join("lockfile");
+
+        let content = std::fs::read_to_string(&lockfile_path)
+            .map_err(|_| format!("无法读取 lockfile: {}", lockfile_path.display()))?;
+        let parts: Vec<&str> = content.trim().split(':').collect();
+        if parts.len() >= 4 {
+            Ok((parts[2].to_string(), parts[3].to_string()))
+        } else {
+            Err("lockfile 格式异常".into())
+        }
     }
 
     /// 调用 LCU API
