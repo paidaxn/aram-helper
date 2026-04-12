@@ -1,0 +1,9 @@
+# Cloudflare Workers 静态资源部署配置
+# 把 website/ 作为静态网站部署到 Cloudflare
+
+name = "lol-redpacket"
+compatibility_date = "2025-01-01"
+
+[assets]
+directory = "./"
+not_found_handling = "single-page-application"
