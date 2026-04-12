@@ -82,6 +82,23 @@ async function fetchDamageRanking() {
   }
 }
 
+// 手动查看上一局（用于测试验证）
+const loadingLastGame = ref(false);
+async function viewLastGame() {
+  loadingLastGame.value = true;
+  errorMsg.value = "";
+  clearPoll();
+  try {
+    const ranking = await invoke<Player[]>("get_damage_ranking");
+    players.value = ranking;
+    status.value = "result";
+  } catch (e) {
+    errorMsg.value = String(e);
+  } finally {
+    loadingLastGame.value = false;
+  }
+}
+
 // 复制结果到剪贴板
 async function copyResult() {
   const lines = players.value.map(
@@ -147,6 +164,10 @@ onUnmounted(() => {
         {{ gamePhase ? `当前：${phaseText(gamePhase)}` : "等待游戏结束后自动显示结果" }}
       </p>
       <div class="dots"><span /><span /><span /></div>
+      <button class="btn-last-game" @click="viewLastGame" :disabled="loadingLastGame">
+        {{ loadingLastGame ? "加载中..." : "查看上一局" }}
+      </button>
+      <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
     </div>
 
     <!-- 对局结果 -->
@@ -275,6 +296,26 @@ h1 {
 
 .dots span:nth-child(2) { animation-delay: 0.2s; }
 .dots span:nth-child(3) { animation-delay: 0.4s; }
+
+.btn-last-game {
+  margin-top: 24px;
+  padding: 10px 24px;
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn-last-game:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-last-game:not(:disabled):active {
+  background: rgba(255, 255, 255, 0.05);
+}
 
 @keyframes dot {
   0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
