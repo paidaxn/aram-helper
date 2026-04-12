@@ -32,11 +32,24 @@ const historyLoading = ref(false);
 const currentRuleId = ref<string>(localStorage.getItem("ruleId") || "classic");
 watch(currentRuleId, (v) => localStorage.setItem("ruleId", v));
 
+// 4 人局模式（组队 vs 个人战），仅影响经典规则
+const fourPlayerMode = ref<"team" | "solo">(
+  (localStorage.getItem("4pMode") as "team" | "solo") || "team"
+);
+watch(fourPlayerMode, (v) => localStorage.setItem("4pMode", v));
+
 const currentRule = computed(() => getRule(currentRuleId.value));
 const ruleResult = computed(() => {
   if (!gameResult.value) return null;
-  return currentRule.value.calculate(gameResult.value);
+  return currentRule.value.calculate(gameResult.value, {
+    fourPlayerMode: fourPlayerMode.value,
+  });
 });
+
+// 是否显示 4 人局模式切换
+const show4pToggle = computed(
+  () => currentRule.value.id === "classic" && ruleResult.value?.friendCount === 4
+);
 const loserTeam = computed(() => ruleResult.value?.teams.find((t) => t.isLoser));
 
 // ────── 轮询 ──────
@@ -279,6 +292,20 @@ onUnmounted(() => clearPoll());
           <p v-if="ruleResult.needsFloors && !gameResult.hasAccurateFloors" class="approx-tip">
             ⚠ 历史对局，分队可能不准
           </p>
+
+          <!-- 4 人局：组队 / 个人战切换 -->
+          <div v-if="show4pToggle" class="mode-toggle">
+            <button
+              class="mode-btn"
+              :class="{ active: fourPlayerMode === 'team' }"
+              @click="fourPlayerMode = 'team'"
+            >组队 2v2</button>
+            <button
+              class="mode-btn"
+              :class="{ active: fourPlayerMode === 'solo' }"
+              @click="fourPlayerMode = 'solo'"
+            >个人战</button>
+          </div>
 
           <div v-if="loserTeam" class="loser-box">
             <span class="loser-name">{{ loserTeam.players.map(p => p.summonerName).join("、") }}</span>
@@ -534,6 +561,37 @@ body::before {
 .nav-meta {
   color: var(--muted); font-size: 11px;
   margin-left: auto; font-variant-numeric: tabular-nums;
+}
+
+/* ────── 4人局模式切换 ────── */
+.mode-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+}
+.mode-btn {
+  flex: 1;
+  padding: 7px 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: all 0.2s ease;
+}
+.mode-btn:hover:not(.active) { color: var(--text-2); }
+.mode-btn.active {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 2px 8px var(--primary-glow);
 }
 
 .approx-tip {

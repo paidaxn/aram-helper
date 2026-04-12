@@ -38,11 +38,16 @@ export interface RuleResult {
   needsFloors: boolean; // 该规则是否依赖楼层数据
 }
 
+export interface RuleOptions {
+  /** 4 人局模式：team=2+2 组队 / solo=4 人个人战 */
+  fourPlayerMode?: "team" | "solo";
+}
+
 export interface ScoringRule {
   id: string;
   name: string;
   description: string;
-  calculate(game: GameResult): RuleResult;
+  calculate(game: GameResult, options?: RuleOptions): RuleResult;
 }
 
 // 找最低分标为输家（支持多个并列）
@@ -62,10 +67,11 @@ const classicRule: ScoringRule = {
   id: "classic",
   name: "红包局经典",
   description: "输出+承伤/2，按选英雄楼层分组。2-3人每人单独；4人前2后2；5人1+2楼/3楼(×2补偿)/4+5楼",
-  calculate(game) {
+  calculate(game, options) {
     const friends = game.players.filter((p) => p.isFriend);
     const count = friends.length;
     const label = "综合分";
+    const fourPlayerMode = options?.fourPlayerMode ?? "team";
 
     if (count < 2) {
       return { teams: [], friendCount: count, isRedPacketGame: false, scoreLabel: label, needsFloors: true };
@@ -85,20 +91,31 @@ const classicRule: ScoringRule = {
         isLoser: false,
       }));
     } else if (count === 4) {
-      teams = [
-        {
-          name: `${sorted[0].summonerName}、${sorted[1].summonerName}`,
-          players: [sorted[0], sorted[1]],
-          score: score(sorted[0]) + score(sorted[1]),
+      if (fourPlayerMode === "solo") {
+        // 4 人个人战：每人单独算
+        teams = sorted.map((p) => ({
+          name: p.summonerName,
+          players: [p],
+          score: score(p),
           isLoser: false,
-        },
-        {
-          name: `${sorted[2].summonerName}、${sorted[3].summonerName}`,
-          players: [sorted[2], sorted[3]],
-          score: score(sorted[2]) + score(sorted[3]),
-          isLoser: false,
-        },
-      ];
+        }));
+      } else {
+        // 组队：前 2 后 2
+        teams = [
+          {
+            name: `${sorted[0].summonerName}、${sorted[1].summonerName}`,
+            players: [sorted[0], sorted[1]],
+            score: score(sorted[0]) + score(sorted[1]),
+            isLoser: false,
+          },
+          {
+            name: `${sorted[2].summonerName}、${sorted[3].summonerName}`,
+            players: [sorted[2], sorted[3]],
+            score: score(sorted[2]) + score(sorted[3]),
+            isLoser: false,
+          },
+        ];
+      }
     } else if (count === 5) {
       teams = [
         {
