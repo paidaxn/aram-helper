@@ -219,9 +219,11 @@ impl LcuConnection {
 
     #[cfg(target_os = "windows")]
     fn from_wmic() -> Result<(String, String), Box<dyn std::error::Error + Send + Sync>> {
+        use std::os::windows::process::CommandExt;
         use std::process::Command;
         let out = Command::new("cmd")
             .args(["/C", "wmic process where \"name='LeagueClientUx.exe'\" get CommandLine /value"])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW，隐藏终端黑窗
             .output()?;
         let s = String::from_utf8_lossy(&out.stdout);
         if s.trim().is_empty() { return Err("未找到 LeagueClientUx.exe".into()); }
@@ -230,9 +232,11 @@ impl LcuConnection {
 
     #[cfg(target_os = "windows")]
     fn from_powershell_cim() -> Result<(String, String), Box<dyn std::error::Error + Send + Sync>> {
+        use std::os::windows::process::CommandExt;
         use std::process::Command;
         let out = Command::new("powershell")
             .args(["-NoProfile", "-Command", "(Get-CimInstance Win32_Process -Filter \"name='LeagueClientUx.exe'\").CommandLine"])
+            .creation_flags(0x08000000)
             .output()?;
         let s = String::from_utf8_lossy(&out.stdout);
         if s.trim().is_empty() { return Err("未找到 LeagueClientUx.exe".into()); }
@@ -241,9 +245,11 @@ impl LcuConnection {
 
     #[cfg(target_os = "windows")]
     fn from_process_lockfile() -> Result<(String, String), Box<dyn std::error::Error + Send + Sync>> {
+        use std::os::windows::process::CommandExt;
         use std::process::Command;
         let out = Command::new("cmd")
             .args(["/C", "wmic process where \"name='LeagueClientUx.exe'\" get ExecutablePath /value"])
+            .creation_flags(0x08000000)
             .output()?;
         let s = String::from_utf8_lossy(&out.stdout);
         let path = s.lines()
@@ -253,6 +259,7 @@ impl LcuConnection {
         if path.is_empty() {
             let out = Command::new("powershell")
                 .args(["-NoProfile", "-Command", "(Get-Process LeagueClientUx -ErrorAction SilentlyContinue).Path"])
+                .creation_flags(0x08000000)
                 .output()?;
             let ps = String::from_utf8_lossy(&out.stdout).trim().to_string();
             if ps.is_empty() { return Err("无法获取进程路径".into()); }
