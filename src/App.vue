@@ -90,6 +90,7 @@ async function fetchLatestResult() {
     gameResult.value = await invoke<GameResult>("get_damage_ranking");
     cameFrom.value = "status";
     page.value = "result";
+    startAutoDismissPoll();
   } catch (e) {
     errorMsg.value = String(e);
     pollTimer = setTimeout(pollGamePhase, 3000);
@@ -106,11 +107,34 @@ async function viewLastGame() {
     gameResult.value = await invoke<GameResult>("get_damage_ranking");
     cameFrom.value = "status";
     page.value = "result";
+    startAutoDismissPoll();
   } catch (e) {
     errorMsg.value = String(e);
   } finally {
     loading.value = false;
   }
+}
+
+// 结果页继续轮询游戏状态，新对局开始时自动返回
+async function startAutoDismissPoll() {
+  clearPoll();
+  const tick = async () => {
+    try {
+      const phase = await invoke<string>("get_gameflow_phase");
+      gamePhase.value = phase;
+      // 新对局开始 → 自动回到首页
+      const newGamePhases = ["ChampSelect", "ReadyCheck", "Matchmaking", "GameStart", "InProgress"];
+      if (newGamePhases.includes(phase)) {
+        goHome();
+        return;
+      }
+      pollTimer = setTimeout(tick, 3000);
+    } catch {
+      connStatus.value = "disconnected";
+      pollTimer = setTimeout(pollConnection, 5000);
+    }
+  };
+  pollTimer = setTimeout(tick, 3000);
 }
 
 async function loadHistory() {
@@ -132,6 +156,7 @@ async function viewGame(gameId: number) {
     gameResult.value = await invoke<GameResult>("get_game_result", { gameId });
     cameFrom.value = "history";
     page.value = "result";
+    startAutoDismissPoll();
   } catch (e) {
     errorMsg.value = String(e);
   } finally {
