@@ -40,17 +40,19 @@ impl LcuConnection {
 
     /// 获取 LCU 端口和 token（全自动检测，无需配置路径）
     fn find_credentials() -> Result<(String, String), Box<dyn std::error::Error + Send + Sync>> {
-        // 方式1：从进程命令行参数获取 port 和 token（最可靠）
         #[cfg(target_os = "windows")]
         {
-            if let Ok(result) = Self::from_process_args() {
+            // 方式1：wmic 获取命令行（无需管理员，兼容性最好）
+            if let Ok(result) = Self::from_wmic() {
                 return Ok(result);
             }
-        }
 
-        // 方式2：从进程路径定位 lockfile（备用）
-        #[cfg(target_os = "windows")]
-        {
+            // 方式2：PowerShell Get-CimInstance（需要管理员权限）
+            if let Ok(result) = Self::from_powershell_cim() {
+                return Ok(result);
+            }
+
+            // 方式3：通过进程路径定位 lockfile
             if let Ok(result) = Self::from_process_lockfile() {
                 return Ok(result);
             }
@@ -85,9 +87,27 @@ impl LcuConnection {
         Some((port, token))
     }
 
-    /// Windows: 通过 PowerShell 获取进程命令行参数（兼容 Win10/11）
+    /// Windows: 通过 wmic 获取命令行参数（无需管理员权限）
     #[cfg(target_os = "windows")]
-    fn from_process_args() -> Result<(String, String), Box<dyn std::error::Error + Send + Sync>> {
+    fn from_wmic() -> Result<(String, String), Box<dyn std::error::Error + Send + Sync>> {
+        use std::process::Command;
+
+        let output = Command::new("cmd")
+            .args(["/C", "wmic process where \"name='LeagueClientUx.exe'\" get CommandLine /value"])
+            .output()?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if stdout.trim().is_empty() {
+            return Err("wmic: 未找到 LeagueClientUx.exe".into());
+        }
+
+        Self::extract_port_token(&stdout)
+            .ok_or_else(|| "wmic: 命令行中未找到 port/token".into())
+    }
+
+    /// Windows: 通过 PowerShell Get-CimInstance 获取命令行参数
+    #[cfg(target_os = "windows")]
+    fn from_powershell_cim() -> Result<(String, String), Box<dyn std::error::Error + Send + Sync>> {
         use std::process::Command;
 
         let output = Command::new("powershell")
@@ -99,11 +119,11 @@ impl LcuConnection {
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         if stdout.trim().is_empty() {
-            return Err("LeagueClientUx.exe 进程未运行".into());
+            return Err("PowerShell: 未找到 LeagueClientUx.exe".into());
         }
 
         Self::extract_port_token(&stdout)
-            .ok_or_else(|| "进程命令行中未找到 port/token".into())
+            .ok_or_else(|| "PowerShell: 命令行中未找到 port/token".into())
     }
 
     /// Windows: 通过进程路径定位 lockfile（备用方案）
@@ -111,32 +131,52 @@ impl LcuConnection {
     fn from_process_lockfile() -> Result<(String, String), Box<dyn std::error::Error + Send + Sync>> {
         use std::process::Command;
 
-        // 获取 LeagueClientUx.exe 的可执行文件路径
-        let output = Command::new("powershell")
-            .args([
-                "-NoProfile", "-Command",
-                "(Get-Process LeagueClientUx -ErrorAction SilentlyContinue).Path",
-            ])
+        // 用 wmic 获取 exe 路径（不需要管理员权限）
+        let output = Command::new("cmd")
+            .args(["/C", "wmic process where \"name='LeagueClientUx.exe'\" get ExecutablePath /value"])
             .output()?;
 
-        let exe_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let exe_path = stdout
+            .lines()
+            .find(|l| l.starts_with("ExecutablePath="))
+            .map(|l| l.trim_start_matches("ExecutablePath=").trim())
+            .unwrap_or("")
+            .to_string();
+
         if exe_path.is_empty() {
-            return Err("未找到 LeagueClientUx 进程".into());
+            // 再试 PowerShell
+            let output = Command::new("powershell")
+                .args([
+                    "-NoProfile", "-Command",
+                    "(Get-Process LeagueClientUx -ErrorAction SilentlyContinue).Path",
+                ])
+                .output()?;
+            let ps_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if ps_path.is_empty() {
+                return Err("无法获取 LeagueClientUx 进程路径".into());
+            }
+            return Self::read_lockfile_from_exe(&ps_path);
         }
 
-        // lockfile 和客户端 exe 在同一目录
-        let client_dir = std::path::Path::new(&exe_path)
+        Self::read_lockfile_from_exe(&exe_path)
+    }
+
+    /// 根据 exe 路径读取同目录下的 lockfile
+    #[cfg(target_os = "windows")]
+    fn read_lockfile_from_exe(exe_path: &str) -> Result<(String, String), Box<dyn std::error::Error + Send + Sync>> {
+        let client_dir = std::path::Path::new(exe_path)
             .parent()
             .ok_or("无法获取客户端目录")?;
         let lockfile_path = client_dir.join("lockfile");
 
         let content = std::fs::read_to_string(&lockfile_path)
-            .map_err(|_| format!("无法读取 lockfile: {}", lockfile_path.display()))?;
+            .map_err(|e| format!("无法读取 lockfile {}: {}", lockfile_path.display(), e))?;
         let parts: Vec<&str> = content.trim().split(':').collect();
         if parts.len() >= 4 {
             Ok((parts[2].to_string(), parts[3].to_string()))
         } else {
-            Err("lockfile 格式异常".into())
+            Err(format!("lockfile 格式异常: {}", content).into())
         }
     }
 
