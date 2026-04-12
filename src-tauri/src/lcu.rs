@@ -437,6 +437,45 @@ impl LcuConnection {
         })
     }
 
+    /// 调试：获取最近一局的原始参与者排序数据
+    pub async fn debug_participant_order(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let summoner = self.api("/lol-summoner/v1/current-summoner").await?;
+        let my_puuid = summoner["puuid"].as_str().ok_or("无法获取 PUUID")?.to_string();
+
+        let history = self.api(
+            &format!("/lol-match-history/v1/products/lol/{}/matches?begIndex=0&endIndex=1", my_puuid)
+        ).await?;
+        let game_id = history["games"]["games"][0]["gameId"].as_i64().unwrap_or(0);
+
+        let details = self.api(&format!("/lol-match-history/v1/games/{}", game_id)).await?;
+        let participants = details["participants"].as_array().ok_or("无参与者")?;
+        let identities = details["participantIdentities"].as_array().ok_or("无身份")?;
+
+        let mut lines = vec![format!("=== Game {} ===", game_id)];
+
+        for (i, p) in participants.iter().enumerate() {
+            let pid = p["participantId"].as_i64().unwrap_or(0);
+            let champ = p["championId"].as_i64().unwrap_or(0);
+            let team = p["teamId"].as_i64().unwrap_or(0);
+
+            let identity = identities.iter().find(|id| id["participantId"].as_i64() == Some(pid));
+            let name = identity
+                .and_then(|id| id["player"]["gameName"].as_str().or(id["player"]["summonerName"].as_str()))
+                .unwrap_or("?");
+            let puuid = identity
+                .and_then(|id| id["player"]["puuid"].as_str())
+                .unwrap_or("");
+            let is_me = puuid == my_puuid;
+
+            lines.push(format!(
+                "idx={} pid={} team={} champ={} name={} {}",
+                i, pid, team, champ, name, if is_me { "<-- 我" } else { "" }
+            ));
+        }
+
+        Ok(lines.join("\n"))
+    }
+
     /// 获取最近一局的红包局结果
     pub async fn get_last_game_result(&self, champ_order: &HashMap<i64, usize>) -> Result<GameResult, Box<dyn std::error::Error + Send + Sync>> {
         let summoner = self.api("/lol-summoner/v1/current-summoner").await?;

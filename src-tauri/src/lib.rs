@@ -54,6 +54,13 @@ async fn get_game_result(game_id: i64) -> Result<GameResult, String> {
     conn.get_game_result(game_id, &HashMap::new()).await.map_err(|e| e.to_string())
 }
 
+/// 调试：查看原始参与者排序
+#[tauri::command]
+async fn debug_match_data() -> Result<String, String> {
+    let conn = LcuConnection::connect().await.map_err(|e| e.to_string())?;
+    conn.debug_participant_order().await.map_err(|e| e.to_string())
+}
+
 /// 获取 Windows 工作区域（排除任务栏）
 #[cfg(target_os = "windows")]
 fn get_work_area() -> (i32, i32, i32, i32) {
@@ -77,7 +84,8 @@ pub fn run() {
             capture_champ_select,
             get_damage_ranking,
             get_match_list,
-            get_game_result
+            get_game_result,
+            debug_match_data
         ])
         .setup(|app| {
             #[cfg(target_os = "windows")]
