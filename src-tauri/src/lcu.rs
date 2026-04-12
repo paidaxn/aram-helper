@@ -8,32 +8,26 @@ pub struct LcuConnection {
     client: reqwest::Client,
 }
 
-// ────── 数据结构 ──────
+// ────── 数据结构（原始数据，规则引擎在前端） ──────
 
+/// 玩家原始数据
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct PlayerDamage {
+pub struct PlayerData {
     pub summoner_name: String,
     pub champion_id: i64,
     pub damage: i64,
     pub damage_taken: i64,
-    pub score: f64,
+    pub gold_earned: i64,
     pub kills: i64,
     pub deaths: i64,
     pub assists: i64,
     pub floor: usize,
     pub is_friend: bool,
+    pub is_me: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct TeamResult {
-    pub name: String,
-    pub players: Vec<PlayerDamage>,
-    pub score: f64,
-    pub is_loser: bool,
-}
-
+/// 对局原始数据（算分和分组由前端规则引擎处理）
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GameResult {
@@ -41,11 +35,7 @@ pub struct GameResult {
     pub game_mode: String,
     pub game_duration: i64,
     pub timestamp: i64,
-    pub all_players: Vec<PlayerDamage>,
-    pub friend_count: usize,
-    pub teams: Vec<TeamResult>,
-    pub is_red_packet_game: bool,
-    /// 楼层数据是否来自选英雄阶段（true=精确，false=近似）
+    pub players: Vec<PlayerData>, // 己方 5 人
     pub has_accurate_floors: bool,
 }
 
@@ -57,97 +47,6 @@ pub struct MatchSummary {
     pub game_duration: i64,
     pub timestamp: i64,
     pub champion_id: i64,
-}
-
-// ────── 算分规则（可扩展） ──────
-
-/// 当前规则：输出伤害 + 承受伤害 / 2
-fn calculate_score(damage: i64, damage_taken: i64) -> f64 {
-    damage as f64 + damage_taken as f64 / 2.0
-}
-
-/// 5 人模式中 3 楼（单人队）的等效分数：输出×2 + 承伤
-fn calculate_solo_team_score(player: &PlayerDamage) -> f64 {
-    player.damage as f64 * 2.0 + player.damage_taken as f64
-}
-
-// ────── 分组逻辑（可扩展） ──────
-
-fn group_into_teams(friends: &[&PlayerDamage]) -> Vec<TeamResult> {
-    let count = friends.len();
-    if count < 2 {
-        return vec![];
-    }
-
-    let mut sorted: Vec<PlayerDamage> = friends.iter().map(|p| (*p).clone()).collect();
-    sorted.sort_by_key(|p| p.floor);
-
-    let mut teams = match count {
-        2 | 3 => {
-            sorted.iter().map(|p| TeamResult {
-                name: p.summoner_name.clone(),
-                players: vec![p.clone()],
-                score: p.score,
-                is_loser: false,
-            }).collect::<Vec<_>>()
-        }
-        4 => {
-            let s1 = sorted[0].score + sorted[1].score;
-            let s2 = sorted[2].score + sorted[3].score;
-            vec![
-                TeamResult {
-                    name: format!("{}、{}", sorted[0].summoner_name, sorted[1].summoner_name),
-                    players: vec![sorted[0].clone(), sorted[1].clone()],
-                    score: s1,
-                    is_loser: false,
-                },
-                TeamResult {
-                    name: format!("{}、{}", sorted[2].summoner_name, sorted[3].summoner_name),
-                    players: vec![sorted[2].clone(), sorted[3].clone()],
-                    score: s2,
-                    is_loser: false,
-                },
-            ]
-        }
-        5 => {
-            let s1 = sorted[0].score + sorted[1].score;
-            let s2 = calculate_solo_team_score(&sorted[2]);
-            let s3 = sorted[3].score + sorted[4].score;
-            vec![
-                TeamResult {
-                    name: format!("{}、{}", sorted[0].summoner_name, sorted[1].summoner_name),
-                    players: vec![sorted[0].clone(), sorted[1].clone()],
-                    score: s1,
-                    is_loser: false,
-                },
-                TeamResult {
-                    name: format!("{}（单人×2）", sorted[2].summoner_name),
-                    players: vec![sorted[2].clone()],
-                    score: s2,
-                    is_loser: false,
-                },
-                TeamResult {
-                    name: format!("{}、{}", sorted[3].summoner_name, sorted[4].summoner_name),
-                    players: vec![sorted[3].clone(), sorted[4].clone()],
-                    score: s3,
-                    is_loser: false,
-                },
-            ]
-        }
-        _ => vec![],
-    };
-
-    // 标记分数最低的队伍
-    if let Some(min_score) = teams.iter().map(|t| t.score).reduce(f64::min) {
-        for team in &mut teams {
-            if (team.score - min_score).abs() < 0.01 {
-                team.is_loser = true;
-                break;
-            }
-        }
-    }
-
-    teams
 }
 
 // ────── LCU 连接 ──────
@@ -420,35 +319,29 @@ impl LcuConnection {
             .collect();
         team.sort_by_key(|p| p["participantId"].as_i64().unwrap_or(0));
 
-        let all_players: Vec<PlayerDamage> = team.iter().enumerate().map(|(i, p)| {
+        let players: Vec<PlayerData> = team.iter().enumerate().map(|(i, p)| {
             let pid = p["participantId"].as_i64().unwrap_or(0);
             let player_puuid = puuid_map.get(&pid).cloned().unwrap_or_default();
             let champion_id = p["championId"].as_i64().unwrap_or(0);
-            let damage = p["stats"]["totalDamageDealtToChampions"].as_i64().unwrap_or(0);
-            let damage_taken = p["stats"]["totalDamageTaken"].as_i64().unwrap_or(0);
             let is_me = player_puuid == my_puuid;
 
             // 优先用选英雄阶段的楼层，没有则用默认顺序
             let floor = champ_order.get(&champion_id).copied().unwrap_or(i + 1);
 
-            PlayerDamage {
+            PlayerData {
                 summoner_name: name_map.get(&pid).cloned().unwrap_or("未知".to_string()),
                 champion_id,
-                damage,
-                damage_taken,
-                score: calculate_score(damage, damage_taken),
+                damage: p["stats"]["totalDamageDealtToChampions"].as_i64().unwrap_or(0),
+                damage_taken: p["stats"]["totalDamageTaken"].as_i64().unwrap_or(0),
+                gold_earned: p["stats"]["goldEarned"].as_i64().unwrap_or(0),
                 kills: p["stats"]["kills"].as_i64().unwrap_or(0),
                 deaths: p["stats"]["deaths"].as_i64().unwrap_or(0),
                 assists: p["stats"]["assists"].as_i64().unwrap_or(0),
                 floor,
                 is_friend: is_me || friend_puuids.contains(&player_puuid),
+                is_me,
             }
         }).collect();
-
-        let friends: Vec<&PlayerDamage> = all_players.iter().filter(|p| p.is_friend).collect();
-        let friend_count = friends.len();
-        let teams = group_into_teams(&friends);
-        let is_red_packet_game = friend_count >= 2;
 
         let has_accurate_floors = !champ_order.is_empty();
 
@@ -457,10 +350,7 @@ impl LcuConnection {
             game_mode,
             game_duration,
             timestamp,
-            all_players,
-            friend_count,
-            teams,
-            is_red_packet_game,
+            players,
             has_accurate_floors,
         })
     }
