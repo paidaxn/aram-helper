@@ -194,7 +194,7 @@ onUnmounted(() => clearPoll());
     <template v-if="page === 'status'">
       <div v-if="connStatus === 'disconnected'" class="center-page">
         <div class="icon">🎮</div>
-        <p class="title">ARAM 红包局助手</p>
+        <p class="title">LOL 红包局助手</p>
         <p class="sub">等待客户端启动...</p>
         <div class="dots"><i /><i /><i /></div>
         <p v-if="errorMsg" class="err">{{ errorMsg }}</p>
