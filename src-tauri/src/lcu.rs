@@ -42,23 +42,31 @@ impl LcuConnection {
     fn find_credentials() -> Result<(String, String), Box<dyn std::error::Error + Send + Sync>> {
         #[cfg(target_os = "windows")]
         {
+            let mut errors = Vec::new();
+
             // 方式1：wmic 获取命令行（无需管理员，兼容性最好）
-            if let Ok(result) = Self::from_wmic() {
-                return Ok(result);
+            match Self::from_wmic() {
+                Ok(result) => return Ok(result),
+                Err(e) => errors.push(format!("wmic: {}", e)),
             }
 
             // 方式2：PowerShell Get-CimInstance（需要管理员权限）
-            if let Ok(result) = Self::from_powershell_cim() {
-                return Ok(result);
+            match Self::from_powershell_cim() {
+                Ok(result) => return Ok(result),
+                Err(e) => errors.push(format!("powershell: {}", e)),
             }
 
             // 方式3：通过进程路径定位 lockfile
-            if let Ok(result) = Self::from_process_lockfile() {
-                return Ok(result);
+            match Self::from_process_lockfile() {
+                Ok(result) => return Ok(result),
+                Err(e) => errors.push(format!("lockfile: {}", e)),
             }
+
+            return Err(format!("所有检测方式均失败:\n{}", errors.join("\n")).into());
         }
 
-        Err("找不到英雄联盟客户端，请确保游戏已启动".into())
+        #[cfg(not(target_os = "windows"))]
+        Err("仅支持 Windows 系统".into())
     }
 
     /// 从命令行参数中提取 port 和 token
