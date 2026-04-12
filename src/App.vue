@@ -83,9 +83,9 @@ async function pollGamePhase() {
   try {
     const phase = await invoke<string>("get_gameflow_phase");
     gamePhase.value = phase;
-    // 选英雄阶段：抓取楼层顺序
+    // 选英雄阶段：抓取楼层顺序（await 确保写入完成）
     if (phase === "ChampSelect") {
-      invoke("capture_champ_select").catch(() => {});
+      await invoke("capture_champ_select").catch(() => {});
     }
 
     if (phase === "EndOfGame" || phase === "WaitingForStats") {

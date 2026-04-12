@@ -155,11 +155,27 @@ fn group_into_teams(friends: &[&PlayerDamage]) -> Vec<TeamResult> {
 impl LcuConnection {
     pub async fn connect() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let (port, token) = Self::find_credentials()?;
+        Self::from_credentials(port, token).await
+    }
+
+    /// 用已知凭证创建连接（跳过检测，直接连）
+    pub async fn from_credentials(port: String, token: String) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let auth = base64::engine::general_purpose::STANDARD.encode(format!("riot:{}", token));
         let client = reqwest::Client::builder()
             .danger_accept_invalid_certs(true)
             .build()?;
         Ok(Self { port, auth, client })
+    }
+
+    /// 获取当前凭证（用于缓存）
+    pub fn credentials(&self) -> (String, String) {
+        // 从 auth 反解 token
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(&self.auth)
+            .unwrap_or_default();
+        let s = String::from_utf8_lossy(&decoded);
+        let token = s.strip_prefix("riot:").unwrap_or("").to_string();
+        (self.port.clone(), token)
     }
 
     fn find_credentials() -> Result<(String, String), Box<dyn std::error::Error + Send + Sync>> {
