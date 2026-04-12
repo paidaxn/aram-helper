@@ -13,10 +13,11 @@
     "windows": [
       {
         "title": "ARAM 红包局助手",
-        "width": 420,
-        "height": 600,
+        "width": 380,
+        "height": 560,
         "resizable": true,
-        "decorations": true
+        "decorations": true,
+        "alwaysOnTop": false
       }
     ],
     "security": {
