@@ -276,6 +276,22 @@ impl LcuConnection {
         Ok(data.as_str().unwrap_or("None").to_string())
     }
 
+    /// 抓取选英雄阶段的楼层顺序 (championId → floor 1-5)
+    pub async fn get_champ_select_order(&self) -> Result<HashMap<i64, usize>, Box<dyn std::error::Error + Send + Sync>> {
+        let data = self.api("/lol-champ-select/v1/session").await?;
+        let my_team = data["myTeam"].as_array().ok_or("无法获取选英雄数据")?;
+
+        let mut order = HashMap::new();
+        for member in my_team {
+            let cell_id = member["cellId"].as_i64().unwrap_or(0) as usize;
+            let champion_id = member["championId"].as_i64().unwrap_or(0);
+            if champion_id > 0 {
+                order.insert(champion_id, cell_id + 1); // cellId 0-4 → floor 1-5
+            }
+        }
+        Ok(order)
+    }
+
     async fn get_friend_puuids(&self) -> HashSet<String> {
         self.api("/lol-chat/v1/friends").await
             .map(|data| {
@@ -333,7 +349,8 @@ impl LcuConnection {
     }
 
     /// 获取指定对局的红包局结果
-    pub async fn get_game_result(&self, game_id: i64) -> Result<GameResult, Box<dyn std::error::Error + Send + Sync>> {
+    /// champ_order: 选英雄阶段的楼层映射 (championId → floor)，为空则用默认顺序
+    pub async fn get_game_result(&self, game_id: i64, champ_order: &HashMap<i64, usize>) -> Result<GameResult, Box<dyn std::error::Error + Send + Sync>> {
         let summoner = self.api("/lol-summoner/v1/current-summoner").await?;
         let my_puuid = summoner["puuid"].as_str().ok_or("无法获取 PUUID")?.to_string();
 
@@ -381,20 +398,24 @@ impl LcuConnection {
         let all_players: Vec<PlayerDamage> = team.iter().enumerate().map(|(i, p)| {
             let pid = p["participantId"].as_i64().unwrap_or(0);
             let player_puuid = puuid_map.get(&pid).cloned().unwrap_or_default();
+            let champion_id = p["championId"].as_i64().unwrap_or(0);
             let damage = p["stats"]["totalDamageDealtToChampions"].as_i64().unwrap_or(0);
             let damage_taken = p["stats"]["totalDamageTaken"].as_i64().unwrap_or(0);
             let is_me = player_puuid == my_puuid;
 
+            // 优先用选英雄阶段的楼层，没有则用默认顺序
+            let floor = champ_order.get(&champion_id).copied().unwrap_or(i + 1);
+
             PlayerDamage {
                 summoner_name: name_map.get(&pid).cloned().unwrap_or("未知".to_string()),
-                champion_id: p["championId"].as_i64().unwrap_or(0),
+                champion_id,
                 damage,
                 damage_taken,
                 score: calculate_score(damage, damage_taken),
                 kills: p["stats"]["kills"].as_i64().unwrap_or(0),
                 deaths: p["stats"]["deaths"].as_i64().unwrap_or(0),
                 assists: p["stats"]["assists"].as_i64().unwrap_or(0),
-                floor: i + 1,
+                floor,
                 is_friend: is_me || friend_puuids.contains(&player_puuid),
             }
         }).collect();
@@ -417,7 +438,7 @@ impl LcuConnection {
     }
 
     /// 获取最近一局的红包局结果
-    pub async fn get_last_game_result(&self) -> Result<GameResult, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn get_last_game_result(&self, champ_order: &HashMap<i64, usize>) -> Result<GameResult, Box<dyn std::error::Error + Send + Sync>> {
         let summoner = self.api("/lol-summoner/v1/current-summoner").await?;
         let puuid = summoner["puuid"].as_str().ok_or("无法获取 PUUID")?;
 
@@ -429,6 +450,6 @@ impl LcuConnection {
             .as_i64()
             .ok_or("没有找到最近的对局记录")?;
 
-        self.get_game_result(game_id).await
+        self.get_game_result(game_id, champ_order).await
     }
 }

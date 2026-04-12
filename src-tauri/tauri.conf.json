@@ -13,8 +13,8 @@
     "windows": [
       {
         "title": "ARAM 红包局助手",
-        "width": 360,
-        "height": 420,
+        "width": 400,
+        "height": 480,
         "resizable": false,
         "decorations": true
       }

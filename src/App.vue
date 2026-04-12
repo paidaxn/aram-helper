@@ -82,6 +82,11 @@ async function pollGamePhase() {
   try {
     const phase = await invoke<string>("get_gameflow_phase");
     gamePhase.value = phase;
+    // 选英雄阶段：抓取楼层顺序
+    if (phase === "ChampSelect") {
+      invoke("capture_champ_select").catch(() => {});
+    }
+
     if (phase === "EndOfGame" || phase === "WaitingForStats") {
       await fetchLatestResult();
     } else {
@@ -250,7 +255,7 @@ onUnmounted(() => clearPoll());
 
     <!-- ====== 历史页 ====== -->
     <template v-else-if="page === 'history'">
-      <div class="page">
+      <div class="page scrollable">
         <div class="nav">
           <button class="btn-back" @click="goBack">返回</button>
           <span class="nav-title">历史对局</span>
@@ -275,9 +280,9 @@ onUnmounted(() => clearPoll());
 * { margin:0; padding:0; box-sizing:border-box; }
 :root { --bg:#0f0f1a; --card:#1a1a2e; --text:#e0e0e0; --accent:#6366f1; --red:#ef4444; --muted:#666; }
 
-body { background:var(--bg); color:var(--text); font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; user-select:none; overflow:hidden; }
+body { background:var(--bg); color:var(--text); font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; user-select:none; }
 
-.app { height:100vh; display:flex; flex-direction:column; padding:12px; }
+.app { height:100vh; display:flex; flex-direction:column; padding:14px; overflow:hidden; }
 
 /* 居中页面 */
 .center-page { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
@@ -301,7 +306,8 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,"PingF
 .btn-s:active { background:rgba(255,255,255,.04); }
 
 /* 页面容器 */
-.page { flex:1; display:flex; flex-direction:column; }
+.page { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.page.scrollable { overflow-y:auto; }
 
 /* 导航 */
 .nav { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
