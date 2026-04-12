@@ -14,25 +14,36 @@ async fn get_gameflow_phase() -> Result<String, String> {
     conn.get_gameflow_phase().await.map_err(|e| e.to_string())
 }
 
-/// 获取最近一局的红包局结果
 #[tauri::command]
 async fn get_damage_ranking() -> Result<GameResult, String> {
     let conn = LcuConnection::connect().await.map_err(|e| e.to_string())?;
     conn.get_last_game_result().await.map_err(|e| e.to_string())
 }
 
-/// 获取最近 N 局概要列表
 #[tauri::command]
 async fn get_match_list(count: Option<usize>) -> Result<Vec<MatchSummary>, String> {
     let conn = LcuConnection::connect().await.map_err(|e| e.to_string())?;
     conn.get_match_list(count.unwrap_or(20)).await.map_err(|e| e.to_string())
 }
 
-/// 获取指定对局的红包局结果
 #[tauri::command]
 async fn get_game_result(game_id: i64) -> Result<GameResult, String> {
     let conn = LcuConnection::connect().await.map_err(|e| e.to_string())?;
     conn.get_game_result(game_id).await.map_err(|e| e.to_string())
+}
+
+/// 获取 Windows 工作区域（排除任务栏）
+#[cfg(target_os = "windows")]
+fn get_work_area() -> (i32, i32, i32, i32) {
+    use windows_sys::Win32::Foundation::RECT;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SystemParametersInfoW;
+
+    const SPI_GETWORKAREA: u32 = 0x0030;
+    let mut rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+    unsafe {
+        SystemParametersInfoW(SPI_GETWORKAREA, 0, &mut rect as *mut _ as *mut _, 0);
+    }
+    (rect.left, rect.top, rect.right, rect.bottom)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -46,20 +57,20 @@ pub fn run() {
             get_game_result
         ])
         .setup(|app| {
-            // 窗口定位到屏幕右下角
             use tauri::Manager;
+            #[cfg(target_os = "windows")]
             if let Some(window) = app.get_webview_window("main") {
-                if let Ok(Some(monitor)) = window.current_monitor() {
-                    let screen = monitor.size();
-                    let scale = monitor.scale_factor();
-                    let win_w = (380.0 * scale) as u32;
-                    let win_h = (560.0 * scale) as u32;
-                    // 预留 Windows 任务栏空间（约 60px 物理像素）
-                    let taskbar = (60.0 * scale) as u32;
-                    let x = screen.width.saturating_sub(win_w).saturating_sub(16) as i32;
-                    let y = screen.height.saturating_sub(win_h).saturating_sub(taskbar) as i32;
+                {
+                    let (_, _, work_right, work_bottom) = get_work_area();
+                    let win_w = 360;
+                    let win_h = 420;
+                    let x = work_right - win_w - 12;
+                    let y = work_bottom - win_h - 12;
                     let _ = window.set_position(tauri::Position::Physical(
                         tauri::PhysicalPosition::new(x, y),
+                    ));
+                    let _ = window.set_size(tauri::Size::Physical(
+                        tauri::PhysicalSize::new(win_w as u32, win_h as u32),
                     ));
                 }
             }
