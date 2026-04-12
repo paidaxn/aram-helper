@@ -33,6 +33,7 @@ interface GameResult {
   friendCount: number;
   teams: Team[];
   isRedPacketGame: boolean;
+  hasAccurateFloors: boolean;
 }
 
 interface MatchSummary {
@@ -58,7 +59,6 @@ const gameResult = ref<GameResult | null>(null);
 const matchList = ref<MatchSummary[]>([]);
 const historyLoading = ref(false);
 
-const debugInfo = ref("");
 const loserTeam = computed(() => gameResult.value?.teams.find((t) => t.isLoser));
 
 // ────── 轮询 ──────
@@ -165,12 +165,6 @@ function goHome() {
 
 // ────── 工具 ──────
 
-async function debugData() {
-  try {
-    debugInfo.value = await invoke<string>("debug_match_data");
-  } catch (e) { debugInfo.value = String(e); }
-}
-
 function fmt(n: number) { return n.toLocaleString(); }
 function fmtDur(s: number) { return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`; }
 function fmtTime(ts: number) {
@@ -217,9 +211,7 @@ onUnmounted(() => clearPoll());
             {{ loading ? "..." : "上一局" }}
           </button>
           <button class="btn-s" @click="loadHistory">历史</button>
-          <button class="btn-s" @click="debugData" style="color:var(--muted)">调试</button>
         </div>
-        <pre v-if="debugInfo" class="debug-box">{{ debugInfo }}</pre>
         <p v-if="errorMsg" class="err">{{ errorMsg }}</p>
       </div>
     </template>
@@ -238,6 +230,8 @@ onUnmounted(() => clearPoll());
         </div>
 
         <template v-else>
+          <p v-if="!gameResult.hasAccurateFloors" class="approx-tip">⚠ 历史对局，分队可能不准</p>
+
           <!-- 输家高亮 -->
           <div v-if="loserTeam" class="loser-box">
             <span class="loser-name">{{ loserTeam.players.map(p => p.summonerName).join("、") }}</span>
@@ -314,7 +308,7 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,"PingF
 .btn-s:disabled { opacity:.4; }
 .btn-s:active { background:rgba(255,255,255,.04); }
 
-.debug-box { margin-top:8px; padding:8px; background:var(--card); border-radius:6px; font-size:10px; color:var(--muted); white-space:pre-wrap; word-break:break-all; max-height:200px; overflow-y:auto; user-select:text; }
+.approx-tip { font-size:11px; color:#f59e0b; margin-bottom:8px; }
 
 /* 页面容器 */
 .page { flex:1; display:flex; flex-direction:column; overflow:hidden; }

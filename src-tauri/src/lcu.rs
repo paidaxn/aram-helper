@@ -45,6 +45,8 @@ pub struct GameResult {
     pub friend_count: usize,
     pub teams: Vec<TeamResult>,
     pub is_red_packet_game: bool,
+    /// 楼层数据是否来自选英雄阶段（true=精确，false=近似）
+    pub has_accurate_floors: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -425,6 +427,8 @@ impl LcuConnection {
         let teams = group_into_teams(&friends);
         let is_red_packet_game = friend_count >= 2;
 
+        let has_accurate_floors = !champ_order.is_empty();
+
         Ok(GameResult {
             game_id,
             game_mode,
@@ -434,71 +438,8 @@ impl LcuConnection {
             friend_count,
             teams,
             is_red_packet_game,
+            has_accurate_floors,
         })
-    }
-
-    /// 调试：获取最近 N 局的原始参与者排序数据
-    pub async fn debug_participant_order(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        let summoner = self.api("/lol-summoner/v1/current-summoner").await?;
-        let my_puuid = summoner["puuid"].as_str().ok_or("无法获取 PUUID")?.to_string();
-
-        let friend_puuids = self.get_friend_puuids().await;
-
-        let history = self.api(
-            &format!("/lol-match-history/v1/products/lol/{}/matches?begIndex=0&endIndex=3", my_puuid)
-        ).await?;
-        let games = history["games"]["games"].as_array().ok_or("无对局")?;
-
-        let mut all_lines = Vec::new();
-
-        for (gi, game) in games.iter().enumerate() {
-            let game_id = game["gameId"].as_i64().unwrap_or(0);
-            let details = self.api(&format!("/lol-match-history/v1/games/{}", game_id)).await?;
-            let participants = details["participants"].as_array().ok_or("无参与者")?;
-            let identities = details["participantIdentities"].as_array().ok_or("无身份")?;
-
-            all_lines.push(format!("\n=== 第{}局 Game {} ===", gi + 1, game_id));
-
-            // 找到我的队伍
-            let my_pid = identities.iter()
-                .find(|id| id["player"]["puuid"].as_str() == Some(my_puuid.as_str()))
-                .and_then(|id| id["participantId"].as_i64())
-                .unwrap_or(0);
-            let my_team = participants.iter()
-                .find(|p| p["participantId"].as_i64() == Some(my_pid))
-                .and_then(|p| p["teamId"].as_i64())
-                .unwrap_or(0);
-
-            // 只显示己方队伍
-            let mut team_parts: Vec<&serde_json::Value> = participants.iter()
-                .filter(|p| p["teamId"].as_i64() == Some(my_team))
-                .collect();
-            team_parts.sort_by_key(|p| p["participantId"].as_i64().unwrap_or(0));
-
-            for (i, p) in team_parts.iter().enumerate() {
-                let pid = p["participantId"].as_i64().unwrap_or(0);
-                let champ = p["championId"].as_i64().unwrap_or(0);
-
-                let identity = identities.iter().find(|id| id["participantId"].as_i64() == Some(pid));
-                let name = identity
-                    .and_then(|id| id["player"]["gameName"].as_str().or(id["player"]["summonerName"].as_str()))
-                    .unwrap_or("?");
-                let puuid = identity
-                    .and_then(|id| id["player"]["puuid"].as_str())
-                    .unwrap_or("");
-                let is_me = puuid == my_puuid;
-                let is_friend = is_me || friend_puuids.contains(puuid);
-
-                all_lines.push(format!(
-                    "{}楼 pid={} champ={} {} {} {}",
-                    i + 1, pid, champ, name,
-                    if is_friend { "[好友]" } else { "" },
-                    if is_me { "<--我" } else { "" }
-                ));
-            }
-        }
-
-        Ok(all_lines.join("\n"))
     }
 
     /// 获取最近一局的红包局结果
