@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LOL 红包局助手 — 打完一局，自动告诉你谁发红包</title>
+  <meta name="description" content="英雄联盟红包局自动结算工具。打完一局自动弹窗显示谁最该发红包，支持多种算分规则。" />
+  <meta property="og:title" content="LOL 红包局助手" />
+  <meta property="og:description" content="打完一局 LOL，自动告诉你谁发红包" />
+  <link rel="icon" type="image/png" href="./icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <!-- 背景装饰 -->
+  <div class="bg-glow"></div>
+
+  <!-- 顶部导航 -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <div class="brand">
+        <img src="./icon.png" alt="LOL 红包局助手" class="brand-icon" />
+        <span class="brand-name">LOL 红包局助手</span>
+      </div>
+      <div class="nav-links">
+        <a href="#features">功能</a>
+        <a href="#how-to">使用</a>
+        <a href="#faq">FAQ</a>
+        <a href="https://github.com/paidaxn/aram-helper" target="_blank">GitHub ↗</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero 下载区 -->
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="hero-badge">v<span id="version">0.1.0</span> · Windows</div>
+      <h1 class="hero-title">
+        打完一局 LOL<br />
+        <span class="hero-highlight">自动告诉你谁发红包</span>
+      </h1>
+      <p class="hero-sub">
+        零操作的红包局结算工具。打开它、打游戏、收结果，就这么简单。
+      </p>
+
+      <div class="hero-cta">
+        <a id="download-btn" class="btn-primary" href="https://github.com/paidaxn/aram-helper/releases/latest" target="_blank">
+          <span class="btn-icon">⬇</span>
+          <span class="btn-text">
+            <strong>下载 Windows 版</strong>
+            <small>免费 · 开源 · 约 10MB</small>
+          </span>
+        </a>
+        <a class="btn-secondary" href="#how-to">查看使用说明</a>
+      </div>
+
+      <p class="hero-meta">
+        支持 Windows 10 / 11 · 需英雄联盟客户端
+      </p>
+    </div>
+  </header>
+
+  <!-- 功能特色 -->
+  <section id="features" class="section">
+    <div class="section-inner">
+      <h2 class="section-title">全自动，零打扰</h2>
+      <p class="section-desc">把手从结算键上解放出来，打完就看结果</p>
+
+      <div class="features">
+        <div class="feature">
+          <div class="feature-icon">🎯</div>
+          <h3>自动检测</h3>
+          <p>启动后自动连接英雄联盟客户端。打完一局，结果自动弹窗显示，零操作。</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">⚙️</div>
+          <h3>多种算分规则</h3>
+          <p>红包局经典（输出+承伤/2）、纯伤害最低、OP 综合评分，任你切换。</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">👥</div>
+          <h3>自动好友分组</h3>
+          <p>通过 LCU 自动识别好友，支持 2-5 人模式，4人局可一键切换组队/个人战。</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">📜</div>
+          <h3>历史对局查询</h3>
+          <p>最近 20 局随时回看。每局数据本地保存，楼层数据精准记录。</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">🔒</div>
+          <h3>本地运行</h3>
+          <p>数据全部本地处理，不联网、不上传，不会被腾讯封号。</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">💡</div>
+          <h3>轻量无感</h3>
+          <p>仅 10MB 安装包，贴屏幕右下角自适应窗口，不打扰游戏体验。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 使用说明 -->
+  <section id="how-to" class="section section-alt">
+    <div class="section-inner">
+      <h2 class="section-title">三步开玩</h2>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h3>下载并安装</h3>
+            <p>点击上方下载按钮，下载安装包后双击运行。首次启动时 Windows 会弹出权限提示，点"是"即可。</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h3>以管理员权限启动</h3>
+            <p>右键图标 → "以管理员身份运行"。<br /><small class="muted">需要管理员权限读取 LOL 进程信息。</small></p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <h3>打开英雄联盟</h3>
+            <p>打开 LOL 客户端，窗口会自动出现在屏幕右下角并显示"已连接"。接下来正常打游戏，每局结束自动弹出红包局结算。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq" class="section">
+    <div class="section-inner">
+      <h2 class="section-title">常见问题</h2>
+
+      <div class="faq">
+        <details>
+          <summary>为什么需要管理员权限？</summary>
+          <p>因为英雄联盟客户端是以管理员权限运行的，只有我们的工具也以管理员权限启动，才能读取它的进程信息（端口 + token）。这是唯一的使用限制。</p>
+        </details>
+        <details>
+          <summary>会不会被封号？</summary>
+          <p>不会。LCU API 是英雄联盟客户端暴露的本地接口，Rank-Analysis、WeGame 等第三方工具都在使用，腾讯默许社区使用。我们只读数据不修改，不涉及任何外挂行为。</p>
+        </details>
+        <details>
+          <summary>支持哪些游戏模式？</summary>
+          <p>优先适配海克斯大乱斗（ARAM），其他模式（匹配、排位、无限火力、斗魂竞技场等）也可用，只要能获取伤害数据即可。</p>
+        </details>
+        <details>
+          <summary>好友检测怎么工作的？</summary>
+          <p>通过 LCU API 读取你的英雄联盟好友列表，在对局队友中匹配，自动识别一起玩的好友。无需手动配置。</p>
+        </details>
+        <details>
+          <summary>历史对局的分队为什么不准？</summary>
+          <p>"楼层"信息只在选英雄阶段可以获取，app 安装前打过的历史对局没有记录。安装后打的对局，楼层都是准确的。</p>
+        </details>
+        <details>
+          <summary>可以设置红包金额吗？</summary>
+          <p>下个版本会加。目前只显示谁发红包，金额你们自己商量。</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <img src="./icon.png" alt="" class="footer-icon" />
+        <span>LOL 红包局助手</span>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/paidaxn/aram-helper" target="_blank">GitHub</a>
+        <a href="https://github.com/paidaxn/aram-helper/releases" target="_blank">更新日志</a>
+        <a href="https://github.com/paidaxn/aram-helper/issues" target="_blank">反馈问题</a>
+      </div>
+      <div class="footer-meta">
+        <span>Made by 阿祖 · 2026</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="./app.js"></script>
+</body>
+</html>
