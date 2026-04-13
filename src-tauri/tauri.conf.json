@@ -42,7 +42,7 @@
         "https://github.com/paidaxn/aram-helper/releases/latest/download/latest.json"
       ],
       "dialog": false,
-      "pubkey": ""
+      "pubkey": "untrusted comment: minisign public key: 357909473313763F\nRWQ/dhMzRwl5NeOpnnMsdsUKwDJIAyGmt+oDKahKC4/1T1D/Yuk3VJ0/"
     }
   }
 }
