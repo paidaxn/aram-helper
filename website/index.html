@@ -24,6 +24,14 @@
 </head>
 <body>
 
+  <!-- 移动端访问提示（JS 控制显隐） -->
+  <div id="mobile-banner" class="mobile-banner" style="display:none">
+    <div class="mobile-banner-inner">
+      <span class="mobile-banner-text">💻 本软件仅支持 Windows 电脑，请用电脑打开</span>
+      <button id="copy-link-btn" class="mobile-banner-btn" data-track="nav" data-source="mobile_copy_link">复制链接</button>
+    </div>
+  </div>
+
   <!-- Nav -->
   <nav class="nav">
     <div class="nav-inner">
@@ -68,6 +76,9 @@
 
         <p class="hero-meta reveal" style="--d: .48s">
           免费 · 开源 · 约 10 MB · <span id="version-label">最新版 v0.1.0</span>
+        </p>
+        <p class="hero-platform-note reveal" style="--d: .56s; display:none" id="platform-note">
+          <!-- 非 Windows 时显示平台提示 -->
         </p>
       </div>
 

@@ -1,3 +1,46 @@
+// ────── 平台检测 + 非 Windows 体验优化 ──────
+(function detectPlatform() {
+  const ua = navigator.userAgent;
+  const isMobile = /Mobile|Android|iP(hone|od|ad)/i.test(ua);
+  const isWindows = /Windows/i.test(ua);
+  const isMac = /Macintosh|Mac OS X/i.test(ua) && !isMobile;
+  const isLinux = /Linux/i.test(ua) && !/Android/i.test(ua);
+
+  const note = document.getElementById("platform-note");
+  const banner = document.getElementById("mobile-banner");
+
+  if (isMobile) {
+    // 移动端：顶部横幅 + Hero 加醒目提示
+    if (banner) banner.style.display = "block";
+    document.body.classList.add("is-mobile");
+    if (note) {
+      note.style.display = "inline-block";
+      note.textContent = "💻 本软件仅支持 Windows 电脑，请用电脑访问本站下载";
+    }
+
+    // 复制链接按钮
+    const copyBtn = document.getElementById("copy-link-btn");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText("https://daguagua.top");
+          copyBtn.textContent = "已复制 ✓";
+          setTimeout(() => (copyBtn.textContent = "复制链接"), 2000);
+        } catch {
+          copyBtn.textContent = "复制失败";
+        }
+      });
+    }
+  } else if (isMac || isLinux) {
+    // Mac/Linux：在 Hero meta 下方加一行平台说明
+    if (note) {
+      note.style.display = "inline-block";
+      const os = isMac ? "Mac" : "Linux";
+      note.textContent = `⚠ 检测到你使用 ${os}，本软件目前仅支持 Windows 10 / 11`;
+    }
+  }
+})();
+
 // ────── 事件追踪（钩子） ──────
 function trackEvent(name, props = {}) {
   try {
