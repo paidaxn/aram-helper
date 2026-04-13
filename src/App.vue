@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
+import html2canvas from "html2canvas-pro";
 import { RULES, getRule, type GameResult } from "./rules";
 
 // ────── 类型 ──────
@@ -51,6 +54,12 @@ const show4pToggle = computed(
   () => currentRule.value.id === "classic" && ruleResult.value?.friendCount === 4
 );
 
+// ────── 自动更新状态（先声明，computeTargetHeight 会用） ──────
+type UpdateState = "idle" | "available" | "downloading" | "ready" | "failed";
+const updateState = ref<UpdateState>("idle");
+const updateInfo = ref<{ version: string; notes?: string } | null>(null);
+const updateProgress = ref(0);
+
 // ────── 响应式窗口高度 ──────
 const appRoot = ref<HTMLElement>();
 
@@ -76,10 +85,14 @@ function computeTargetHeight(): number {
         h += t.players.length * 24; // 每个玩家行
       }
       h += 16; // 底部安全 buffer
+      h += 24; // 水印
+      h += 50; // 分享按钮
     } else {
       h += 100;
     }
-    return Math.max(380, Math.min(760, h));
+    // 更新条出现时也要预留高度
+    if (updateState.value !== "idle") h += 48;
+    return Math.max(380, Math.min(820, h));
   }
   return 480;
 }
@@ -91,7 +104,7 @@ async function resizeToContent() {
   } catch {}
 }
 
-watch([page, ruleResult, fourPlayerMode], () => {
+watch([page, ruleResult, fourPlayerMode, updateState], () => {
   resizeToContent();
 });
 const loserTeam = computed(() => ruleResult.value?.teams.find((t) => t.isLoser));
@@ -266,12 +279,131 @@ function modeName(m: string) {
   return ({ ARAM:"大乱斗", KIWI:"大乱斗", CLASSIC:"匹配/排位", URF:"无限火力", CHERRY:"斗魂竞技场" } as Record<string,string>)[m] || m;
 }
 
-onMounted(() => pollConnection());
+// ────── 结果分享图（截图到剪贴板） ──────
+const shareCopied = ref(false);
+const sharing = ref(false);
+const resultArea = ref<HTMLElement>();
+
+async function shareAsImage() {
+  if (!resultArea.value || sharing.value) return;
+  sharing.value = true;
+  try {
+    const canvas = await html2canvas(resultArea.value, {
+      backgroundColor: "#0A0E1A",
+      scale: 2, // 高清
+      logging: false,
+    });
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      try {
+        // 写到剪贴板（图片）
+        await navigator.clipboard.write([
+          new ClipboardItem({ [blob.type]: blob }),
+        ]);
+        shareCopied.value = true;
+        setTimeout(() => (shareCopied.value = false), 2500);
+      } catch {
+        // 浏览器不支持图片剪贴板 → 下载
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `红包局结算-${Date.now()}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+        shareCopied.value = true;
+        setTimeout(() => (shareCopied.value = false), 2500);
+      }
+      sharing.value = false;
+    }, "image/png");
+  } catch (e) {
+    console.warn("share failed:", e);
+    sharing.value = false;
+  }
+}
+
+// ────── 自动更新 ──────
+async function checkForUpdate(silent = true) {
+  try {
+    const u = await check();
+    if (u) {
+      updateInfo.value = { version: u.version, notes: u.body };
+      updateState.value = "available";
+    } else if (!silent) {
+      updateState.value = "idle";
+    }
+  } catch (e) {
+    console.warn("update check failed:", e);
+  }
+}
+
+async function downloadAndInstallUpdate() {
+  try {
+    updateState.value = "downloading";
+    let downloaded = 0;
+    let contentLength = 0;
+    const u = await check();
+    if (!u) {
+      updateState.value = "idle";
+      return;
+    }
+    await u.downloadAndInstall((event) => {
+      switch (event.event) {
+        case "Started":
+          contentLength = event.data.contentLength ?? 0;
+          break;
+        case "Progress":
+          downloaded += event.data.chunkLength;
+          updateProgress.value = contentLength ? Math.round((downloaded / contentLength) * 100) : 0;
+          break;
+        case "Finished":
+          updateState.value = "ready";
+          break;
+      }
+    });
+    // 自动重启
+    await relaunch();
+  } catch (e) {
+    console.warn("update install failed:", e);
+    updateState.value = "failed";
+  }
+}
+
+function dismissUpdate() {
+  updateState.value = "idle";
+}
+
+onMounted(() => {
+  pollConnection();
+  // 启动后 3 秒检查更新（避开开屏轮询争抢）
+  setTimeout(() => checkForUpdate(true), 3000);
+});
 onUnmounted(() => clearPoll());
 </script>
 
 <template>
   <div class="app" ref="appRoot">
+    <!-- 更新提示 -->
+    <div v-if="updateState !== 'idle'" class="update-banner">
+      <template v-if="updateState === 'available'">
+        <span class="update-text">发现新版本 v{{ updateInfo?.version }}</span>
+        <div class="update-actions">
+          <button class="btn-update-skip" @click="dismissUpdate">稍后</button>
+          <button class="btn-update-go" @click="downloadAndInstallUpdate">立即更新</button>
+        </div>
+      </template>
+      <template v-else-if="updateState === 'downloading'">
+        <span class="update-text">下载中 {{ updateProgress }}%</span>
+        <div class="update-progress"><div class="update-progress-bar" :style="{ width: updateProgress + '%' }"></div></div>
+      </template>
+      <template v-else-if="updateState === 'ready'">
+        <span class="update-text">下载完成，正在重启...</span>
+      </template>
+      <template v-else-if="updateState === 'failed'">
+        <span class="update-text">更新失败</span>
+        <button class="btn-update-skip" @click="dismissUpdate">关闭</button>
+      </template>
+    </div>
+
     <!-- ====== 状态页 ====== -->
     <template v-if="page === 'status'">
       <div v-if="connStatus === 'disconnected'" class="center-page">
@@ -351,28 +483,45 @@ onUnmounted(() => clearPoll());
             >个人战</button>
           </div>
 
-          <div v-if="loserTeam" class="loser-box">
-            <div class="loser-name">{{ loserTeam.players.map(p => p.summonerName).join("、") }}</div>
-            <div class="loser-slogan">就是你了，发红包吧！</div>
+          <!-- 截图区域 -->
+          <div ref="resultArea" class="share-area">
+            <div v-if="loserTeam" class="loser-box">
+              <div class="loser-name">{{ loserTeam.players.map(p => p.summonerName).join("、") }}</div>
+              <div class="loser-slogan">就是你了，发红包吧！</div>
+            </div>
+
+            <div
+              v-for="(team, i) in ruleResult.teams"
+              :key="i"
+              class="team"
+              :class="{ lose: team.isLoser }"
+            >
+              <div class="team-top">
+                <span class="team-name">{{ team.name }}</span>
+                <span class="team-pts">{{ fmtScore(team.score, ruleResult.scoreLabel) }} {{ ruleResult.scoreLabel }}</span>
+              </div>
+              <div v-for="p in team.players" :key="p.summonerName" class="p-row">
+                <span class="p-name">{{ p.summonerName }}</span>
+                <span class="p-dmg">{{ fmt(p.damage) }}</span>
+                <span class="p-tkn">{{ fmt(p.damageTaken) }}</span>
+                <span class="p-kda">{{ p.kills }}/{{ p.deaths }}/{{ p.assists }}</span>
+              </div>
+            </div>
+
+            <!-- 水印（截图时也带上） -->
+            <div class="share-watermark">
+              <span>{{ currentRule.name }}</span>
+              <span class="dot">·</span>
+              <span>daguagua.top</span>
+            </div>
           </div>
 
-          <div
-            v-for="(team, i) in ruleResult.teams"
-            :key="i"
-            class="team"
-            :class="{ lose: team.isLoser }"
-          >
-            <div class="team-top">
-              <span class="team-name">{{ team.name }}</span>
-              <span class="team-pts">{{ fmtScore(team.score, ruleResult.scoreLabel) }} {{ ruleResult.scoreLabel }}</span>
-            </div>
-            <div v-for="p in team.players" :key="p.summonerName" class="p-row">
-              <span class="p-name">{{ p.summonerName }}</span>
-              <span class="p-dmg">{{ fmt(p.damage) }}</span>
-              <span class="p-tkn">{{ fmt(p.damageTaken) }}</span>
-              <span class="p-kda">{{ p.kills }}/{{ p.deaths }}/{{ p.assists }}</span>
-            </div>
-          </div>
+          <!-- 分享按钮（不在截图区域内） -->
+          <button class="btn-share" @click="shareAsImage" :disabled="sharing">
+            <span v-if="shareCopied">已复制图片 ✓ 粘贴到微信群</span>
+            <span v-else-if="sharing">生成中...</span>
+            <span v-else>📸 复制截图到剪贴板</span>
+          </button>
         </template>
       </div>
     </template>
@@ -493,6 +642,92 @@ body::before {
   overflow: hidden;
   z-index: 1;
 }
+
+/* ────── 更新提示条 ────── */
+.update-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(124, 58, 237, 0.06));
+  border: 1px solid rgba(167, 139, 250, 0.4);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.update-text { flex: 1; color: var(--primary-hi); font-weight: 500; }
+.update-actions { display: flex; gap: 6px; }
+.btn-update-go, .btn-update-skip {
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.btn-update-go {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.btn-update-go:active { background: #6028c9; }
+.btn-update-skip {
+  background: transparent;
+  color: var(--text-2);
+  border-color: var(--border);
+}
+.btn-update-skip:hover { color: var(--text); }
+.update-progress {
+  width: 80px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.update-progress-bar {
+  height: 100%;
+  background: var(--primary-hi);
+  transition: width 0.2s;
+}
+
+/* ────── 截图分享 ────── */
+.share-area {
+  background: var(--bg);
+  padding: 2px 0;
+}
+.share-watermark {
+  margin-top: 12px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  opacity: 0.7;
+}
+.share-watermark .dot { color: var(--primary); }
+
+.btn-share {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+.btn-share:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--surface-2);
+}
+.btn-share:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-share:active:not(:disabled) { transform: translateY(1px); }
 
 /* ────── 居中页面 ────── */
 .center-page {
