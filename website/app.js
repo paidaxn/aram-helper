@@ -1,10 +1,20 @@
-// ────── 事件追踪（钩子，后续接入分析服务时只需实现 window.__track） ──────
+// ────── 事件追踪（钩子） ──────
 function trackEvent(name, props = {}) {
   try {
+    // Microsoft Clarity 自定义事件
+    if (typeof window.clarity === "function") {
+      window.clarity("event", name);
+      // 额外上报属性作为标签（Clarity 支持）
+      for (const [k, v] of Object.entries(props)) {
+        if (v != null && v !== "") {
+          window.clarity("set", k, String(v));
+        }
+      }
+    }
+    // 预留通用钩子
     if (typeof window.__track === "function") {
       window.__track(name, props);
     }
-    // 调试日志（上线后可移除）
     if (window.location.hostname === "localhost") {
       console.log("[track]", name, props);
     }
